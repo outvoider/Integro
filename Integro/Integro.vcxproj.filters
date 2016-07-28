@@ -1,39 +1,21 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClInclude Include="ConversionMilliseconds.hpp" />
-    <ClInclude Include="ClientLdap.hpp" />
-    <ClInclude Include="ClientLmdb.hpp" />
-    <ClInclude Include="ClientMongo.hpp" />
-    <ClInclude Include="MetadataStoreLmdb.hpp" />
-    <ClInclude Include="SourceStoreLdap.hpp" />
-    <ClInclude Include="DestinationStoreMongo.hpp" />
-    <ClInclude Include="ClientTds.hpp" />
-    <ClInclude Include="SourceStoreTds.hpp" />
-    <ClInclude Include="HostAction.hpp" />
     <ClInclude Include="Debug.hpp" />
-    <ClInclude Include="ClientElastic.hpp" />
-    <ClInclude Include="DestinationStoreElastic.hpp" />
-    <ClInclude Include="DataServiceLdapElastic.hpp" />
-    <ClInclude Include="DataServiceTds.hpp" />
-    <ClInclude Include="DataServiceLdap.hpp" />
-    <ClInclude Include="MetadataProviderLdap.hpp" />
-    <ClInclude Include="MetadataProviderTds.hpp" />
-    <ClInclude Include="SynchronizedBuffer.hpp" />
-    <ClInclude Include="MetadataStoreStreamLmdb.hpp" />
-    <ClInclude Include="SourceStoreMongo.hpp" />
-    <ClInclude Include="SourceStreamMongo.hpp" />
-    <ClInclude Include="DataServiceMongo.hpp" />
-    <ClInclude Include="MetadataProviderMongo.hpp" />
-    <ClInclude Include="MetadataProviderStreamMongo.hpp" />
-    <ClInclude Include="LoadProcessSave.hpp" />
     <ClInclude Include="Mave.hpp" />
-    <ClInclude Include="ConversionMave.hpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="Integro.cpp" />
+    <ClInclude Include="Copy.hpp" />
+    <ClInclude Include="Hash.hpp" />
+    <ClInclude Include="Synchronized.hpp" />
+    <ClInclude Include="Milliseconds.hpp" />
+    <ClInclude Include="Access.hpp" />
+    <ClInclude Include="Integro.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="configs\config.json" />
+    <None Include="configs\debug.json" />
+    <None Include="..\README.md" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
   </ItemGroup>
 </Project>

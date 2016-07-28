@@ -5,9 +5,11 @@
 
 namespace Integro
 {
-	using namespace std;
+	using std::vector;
+	using std::atomic_flag;
 
-	template <typename T>
+	template <
+		typename T>
 	class SynchronizedBuffer
 	{
 		vector<T> items;
@@ -19,7 +21,8 @@ namespace Integro
 			lock.clear();
 		}
 
-		bool IsEmpty()
+		bool
+			IsEmpty()
 		{
 			while (lock.test_and_set());
 				bool result = items.empty();
@@ -28,21 +31,36 @@ namespace Integro
 			return result;
 		}
 
-		void AddOne(const T &item)
+		int
+			Size()
 		{
 			while (lock.test_and_set());
-			items.push_back(item);
+				auto result = items.size();
+			lock.clear();
+
+			return result;
+		}
+
+		void
+			AddOne(
+			const T &item)
+		{
+			while (lock.test_and_set());
+				items.push_back(item);
 			lock.clear();
 		}
 
-		void AddOne(const T &&item)
+		void
+			AddOne(
+			const T &&item)
 		{
 			while (lock.test_and_set());
-			items.emplace_back(move(item));
+				items.emplace_back(move(item));
 			lock.clear();
 		}
 
-		vector<T> GetAll()
+		vector<T>
+			GetAll()
 		{
 			while (lock.test_and_set());
 				vector<T> result(move(items));

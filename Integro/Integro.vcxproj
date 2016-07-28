@@ -153,40 +153,22 @@
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Copy.hpp" />
+    <ClInclude Include="Hash.hpp" />
     <ClInclude Include="Mave.hpp" />
-    <ClInclude Include="DataServiceMongo.hpp" />
-    <ClInclude Include="MetadataProviderMongo.hpp" />
-    <ClInclude Include="MetadataProviderStreamMongo.hpp" />
-    <ClInclude Include="MetadataStoreStreamLmdb.hpp" />
-    <ClInclude Include="SourceStoreMongo.hpp" />
-    <ClInclude Include="SourceStreamMongo.hpp" />
-    <ClInclude Include="SynchronizedBuffer.hpp" />
-    <ClInclude Include="ClientElastic.hpp" />
-    <ClInclude Include="ClientTds.hpp" />
-    <ClInclude Include="ConversionMave.hpp" />
-    <ClInclude Include="DataServiceLdapElastic.hpp" />
-    <ClInclude Include="DestinationStoreElastic.hpp" />
-    <ClInclude Include="HostAction.hpp" />
-    <ClInclude Include="DestinationStoreMongo.hpp" />
+    <ClInclude Include="Synchronized.hpp" />
+    <ClInclude Include="Access.hpp" />
+    <ClInclude Include="Integro.hpp" />
     <ClInclude Include="Debug.hpp" />
-    <ClInclude Include="MetadataProviderLdap.hpp" />
-    <ClInclude Include="ClientLdap.hpp" />
-    <ClInclude Include="ClientLmdb.hpp" />
-    <ClInclude Include="LoadProcessSave.hpp" />
-    <ClInclude Include="MetadataStoreLmdb.hpp" />
-    <ClInclude Include="ConversionMilliseconds.hpp" />
-    <ClInclude Include="ClientMongo.hpp" />
-    <ClInclude Include="DataServiceLdap.hpp" />
-    <ClInclude Include="DataServiceTds.hpp" />
-    <ClInclude Include="SourceStoreLdap.hpp" />
-    <ClInclude Include="SourceStoreTds.hpp" />
-    <ClInclude Include="MetadataProviderTds.hpp" />
+    <ClInclude Include="Milliseconds.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Integro.cpp" />
+    <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\README.md" />
     <None Include="configs\config.json" />
+    <None Include="configs\debug.json" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
