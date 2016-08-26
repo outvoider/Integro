@@ -2,7 +2,7 @@ Integro documentation.
 
 Author: Michael Ostapenko
 
-Version: 2.0
+Version: 2.1
 
 Dependencies:
 
@@ -906,6 +906,16 @@ static
 	, const string &key)
 
 	Removes a key from an lmdb database.
+
+static
+	void
+	Query(
+	const string &path
+	, function<void(const string &key, const string &value)> OnKyeValue)
+
+	OnKyeValue		expected to process fetched key/value pairs
+	
+	Fetches all key/value pairs from an lmdb database.
 
 	path		a path to an lmdb database
 	key			a key in an lmdb database

@@ -19,6 +19,7 @@ namespace Integro
 
 	class Integro
 	{
+		bool isInitialized;
 		static atomic_flag lock;
 
 	public:
@@ -187,10 +188,10 @@ namespace Integro
 			return strings;
 		}
 
-		vector<function<void()>>
+		vector<pair<string, function<void()>>>
 			CreateTdsActions()
 		{
-			vector<function<void()>> actions;
+			vector<pair<string, function<void()>>> actions;
 
 			auto &mongo = config["mongo"];
 			auto &elastic = config["elastic"];
@@ -258,17 +259,17 @@ namespace Integro
 						Copy::CopyDataInBulk<Mave, milliseconds>(LoadData, SaveData, LoadStartTime, SaveStartTime, GetTime);
 					};
 
-					actions.emplace_back(CopyData);
+					actions.push_back(make_pair(action, CopyData));
 				}
 			}
 
 			return actions;
 		}
 
-		vector<function<void()>>
+		vector<pair<string, function<void()>>>
 			CreateLdapActions()
 		{
-			vector<function<void()>> actions;
+			vector<pair<string, function<void()>>> actions;
 
 			auto &mongo = config["mongo"];
 			auto &elastic = config["elastic"];
@@ -329,7 +330,7 @@ namespace Integro
 						Copy::CopyDataInChunks<Mave, milliseconds>(LoadData, SaveData, LoadStartTime, SaveStartTime, GetTime);
 					};
 
-					actions.emplace_back(CopyData);
+					actions.push_back(make_pair(action, CopyData));
 				}
 			}
 
@@ -340,6 +341,7 @@ namespace Integro
 		Integro(
 			int argc
 			, wchar_t* argv[])
+			: isInitialized(false)
 		{
 			using namespace boost::filesystem;
 
@@ -382,10 +384,17 @@ namespace Integro
 				OnError("failed to parse config file");
 				return;
 			}
+
+			isInitialized = true;
 		}
 
 		void Run()
 		{
+			if (!isInitialized)
+			{
+				return;
+			}
+
 			auto ExecuteTdsAction = [&]()
 			{
 				auto period = milliseconds(config["tds"]["settings"]["program"]["sleep ms"].int_value());
@@ -396,8 +405,8 @@ namespace Integro
 					int i = 0;
 					for (auto action : actions)
 					{
-						OnEvent("tds action # " + to_string(++i) + " is starting");
-						Proceed(action, OnError);
+						OnEvent("tds action # " + to_string(++i) + " is starting, action name is '" + action.first + "'");
+						Proceed(action.second, OnError);
 					}
 
 					OnEvent("tds actions are being paused for " + to_string(period.count()) + " milliseconds");
@@ -414,8 +423,8 @@ namespace Integro
 					int i = 0;
 					for (auto action : actions)
 					{
-						OnEvent("ldap action # " + to_string(++i) + " is starting");
-						Proceed(action, OnError);
+						OnEvent("ldap action # " + to_string(++i) + " is starting, action name is '" + action.first + "'");
+						Proceed(action.second, OnError);
 					}
 				}
 			};

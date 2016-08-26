@@ -212,7 +212,7 @@ namespace Integro
 				return v;
 			}
 			default:
-				throw exception("ToString(): unsupported type encountered");
+				throw exception("Mave::Copy(): unsupported type encountered");
 		}
 	}
 
@@ -270,7 +270,7 @@ namespace Integro
 				break;
 			}
 			default:
-				throw exception("ToString(): unsupported type encountered");
+				throw exception("Mave::ToStringStream(): unsupported type encountered");
 		}
 	}
 
@@ -374,7 +374,7 @@ namespace Integro
 					r = ToMave(e.Obj());
 					break;
 				default:
-					throw exception("ToMave(): unsupported type encountered");
+					throw exception("Mave::ToMave(): unsupported type encountered");
 			}
 
 			if (s) f ? m.insert({ e.fieldName(), r }) : v.push_back(r);
@@ -448,7 +448,7 @@ namespace Integro
 							bo.append(i.first, ToBson(i.second));
 							break;
 						default:
-							throw exception("ToBson(): unsupported type encountered");
+							throw exception("Mave::ToBson(): unsupported type encountered");
 					}
 				}
 				return bo.obj();
@@ -486,12 +486,12 @@ namespace Integro
 							ba.append(ToBson(i));
 							break;
 						default:
-							throw exception("ToBson(): unsupported type encountered");
+							throw exception("Mave::ToBson(): unsupported type encountered");
 					}
 				}
 				return ba.arr();
 			default:
-				throw exception("ToBson(): unsupported type encountered");
+				throw exception("Mave::ToBson(): unsupported type encountered");
 		}
 
 		return ba.obj();
@@ -528,10 +528,10 @@ namespace Integro
 				return v;
 			}
 			default:
-				throw exception("ToMave(): unsupported type encountered");
+				throw exception("Mave::ToMave(): unsupported type encountered");
 		}
 
-		throw exception("ToMave(): failed");
+		throw exception("Mave::ToMave(): failed");
 	}
 
 	Json ToJson(const Mave &mave)
@@ -573,9 +573,9 @@ namespace Integro
 				return v;
 			}
 			default:
-				throw exception("ToJson(): unsupported type encountered");
+				throw exception("Mave::ToJson(): unsupported type encountered");
 		}
 
-		throw exception("ToJson(): failed");
+		throw exception("Mave::ToJson(): failed");
 	}
 }

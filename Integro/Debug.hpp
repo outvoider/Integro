@@ -136,7 +136,7 @@ namespace Integro
 			lock.clear();
 			return r;
 		}
-		
+
 		void TryThrow(const int n, const string &s)
 		{
 			if (Rand() % (100 * n) == 0)
@@ -283,6 +283,11 @@ namespace Integro
 		void ElasticDeleteIndex()
 		{
 			ClientElastic::DeleteIndex(elasticUrl, elasticIndex);
+		}
+
+		void ElasticDeleteType()
+		{
+			ClientElastic::DeleteType(elasticUrl, elasticIndex, elasticType);
 		}
 
 		void ElasticCount()
@@ -843,7 +848,7 @@ namespace Integro
 			{
 				Retry(CopyData);
 			}
-			
+
 			cout << "--------------------------------" << endl;
 			cout << "source size: " << source.size() << endl;
 			cout << "destination size: " << dest.size() << endl;
@@ -908,7 +913,7 @@ namespace Integro
 			cout << "-----------------------------------" << endl;
 		}
 
-		void PrintStagingCopyCounts()
+		void PrintCopyCounts()
 		{
 			for (auto &collection : tdsCollections)
 			{
@@ -925,82 +930,169 @@ namespace Integro
 			}
 		}
 
+		void LmdbTest()
+		{
+			int n = 8;
+			string path = "test";
+			string key = "test";
+			string data = "test";
+
+			auto g = [&](int i)
+			{
+				while (true)
+				{
+					try
+					{
+						string value = ClientLmdb::GetOrDefault(path, key);
+						//cout << "g" << i << ": [" << key << "] = " << value << endl;
+					}
+					catch (const exception &ex)
+					{
+						stringstream a; a << "g" << i << ": " << ex.what();
+						Print(a.str());
+					}
+				}
+			};
+
+			auto s = [&](int i)
+			{
+				while (true)
+				{
+					try
+					{
+						ClientLmdb::Set(path, key, data);
+						//cout << "s" << i << ": [" << key << "] = " << data << endl;
+					}
+					catch (const exception &ex)
+					{
+						stringstream a; a << "s" << i << ": " << ex.what();
+						Print(a.str());
+					}
+				}
+			};
+
+			vector<shared_ptr<thread>> gg;
+			vector<shared_ptr<thread>> ss;
+
+			for (int i = 0; i < n; ++i)
+			{
+				gg.push_back(shared_ptr<thread>(new thread(g, i)));
+			}
+
+			for (int i = 0; i < n; ++i)
+			{
+				ss.push_back(shared_ptr<thread>(new thread(s, i)));
+			}
+
+			g(n);
+		}
+
 	public:
 		Debug()
 			: rand(random_device()())
 		{
 			lock.clear();
 
-			stringstream configBuffer;
+			stringstream buffer;
+			string error;
+			ifstream debugInput("configs\\debug.json");
+			buffer << debugInput.rdbuf();
+			auto debug = Json::parse(buffer.str(), error);
 
-			ifstream configInput("configs\\debug.json");
-			configBuffer << configInput.rdbuf();
-
-			string configError;
-			auto config = Json::parse(configBuffer.str(), configError);
-
-			if (configError != "")
+			if (error != "")
 			{
 				throw exception("failed to parse config file");
 			}
 
-			metadataPath = config["metadataPath"].string_value();
-			startIdKey = config["startIdKey"].string_value();
-			startTimeKey = config["startTimeKey"].string_value();
+			buffer.str("");
+			ifstream configInput("configs\\config.json");
+			buffer << configInput.rdbuf();
+			auto config = Json::parse(buffer.str(), error);
 
-			idAttribute = config["idAttribute"].string_value();
-			descriptorAttribute = config["descriptorAttribute"].string_value();
-			timeAttribute = config["timeAttribute"].string_value();
+			if (error != "")
+			{
+				throw exception("failed to parse config file");
+			}
 
-			channelName = config["channelName"].string_value();
-			topicName = config["topicName"].string_value();
-			modelName = config["modelName"].string_value();
-			model = config["model"].string_value();
-			targetStores = ToStringVector(config["targetStores"]);
+			metadataPath = debug["metadataPath"].string_value();
+			startIdKey = debug["startIdKey"].string_value();
+			startTimeKey = debug["startTimeKey"].string_value();
 
-			tdsHost = config["tdsHost"].string_value();
-			tdsUser = config["tdsUser"].string_value();
-			tdsPassword = config["tdsPassword"].string_value();
-			tdsDatabase = config["tdsDatabase"].string_value();
-			tdsQuery = Concatenate(config["tdsQuery"]);
-			tdsCollections = ToStringVector(config["tdsCollections"]);
+			idAttribute = debug["idAttribute"].string_value();
+			descriptorAttribute = debug["descriptorAttribute"].string_value();
+			timeAttribute = debug["timeAttribute"].string_value();
 
-			mongoLocalUrl = config["mongoLocalUrl"].string_value();
-			mongoRemoteUrl = config["mongoRemoteUrl"].string_value();
+			channelName = debug["channelName"].string_value();
+			topicName = debug["topicName"].string_value();
+			modelName = debug["modelName"].string_value();
+			model = debug["model"].string_value();
+			targetStores = ToStringVector(debug["targetStores"]);
+
+			tdsHost = debug["tdsHost"].string_value();
+			tdsUser = debug["tdsUser"].string_value();
+			tdsPassword = debug["tdsPassword"].string_value();
+			tdsDatabase = debug["tdsDatabase"].string_value();
+			tdsQuery = Concatenate(debug["tdsQuery"]);
+
+			mongoLocalUrl = debug["mongoLocalUrl"].string_value();
+			mongoRemoteUrl = debug["mongoRemoteUrl"].string_value();
 			mongoUrl = mongoRemoteUrl;
-			mongoTestDatabase = config["mongoTestDatabase"].string_value();
-			mongoStagingDatabase = config["mongoStagingDatabase"].string_value();
+			mongoTestDatabase = debug["mongoTestDatabase"].string_value();
+			mongoStagingDatabase = debug["mongoStagingDatabase"].string_value();
 			mongoDatabase = mongoTestDatabase;
-			mongoCapped = config["mongoCapped"].string_value();
-			mongoSource = config["mongoSource"].string_value();
-			mongoDestination = config["mongoDestination"].string_value();
+			//mongoDatabase = mongoStagingDatabase;
+			mongoCapped = debug["mongoCapped"].string_value();
+			mongoSource = debug["mongoSource"].string_value();
+			mongoDestination = debug["mongoDestination"].string_value();
 			mongoCollection = mongoDestination;
 
-			elasticLocalUrl = config["elasticLocalUrl"].string_value();
-			elasticRemoteUrl = config["elasticRemoteUrl"].string_value();
+			elasticLocalUrl = debug["elasticLocalUrl"].string_value();
+			elasticRemoteUrl = debug["elasticRemoteUrl"].string_value();
 			elasticUrl = elasticRemoteUrl;
-			elasticTestIndex = config["elasticTestIndex"].string_value();
-			elasticStagingIndex = config["elasticStagingIndex"].string_value();
+			elasticTestIndex = debug["elasticTestIndex"].string_value();
+			elasticStagingIndex = debug["elasticStagingIndex"].string_value();
 			elasticIndex = elasticTestIndex;
-			elasticType = config["elasticType"].string_value();
+			//elasticIndex = elasticStagingIndex;
+			elasticType = debug["elasticType"].string_value();
 
-			ldapHost = config["ldapHost"].string_value();
-			ldapPort = config["ldapPort"].int_value();
-			ldapUser = config["ldapUser"].string_value();
-			ldapPassword = config["ldapPassword"].string_value();
-			ldapNode = config["ldapNode"].string_value();
-			ldapFilter = config["ldapFilter"].string_value();
-			ldapIdAttribute = config["ldapIdAttribute"].string_value();
-			ldapTimeAttribute = config["ldapTimeAttribute"].string_value();
-			ldapCollections = ToStringVector(config["ldapCollections"]);
+			ldapHost = debug["ldapHost"].string_value();
+			ldapPort = debug["ldapPort"].int_value();
+			ldapUser = debug["ldapUser"].string_value();
+			ldapPassword = debug["ldapPassword"].string_value();
+			ldapNode = debug["ldapNode"].string_value();
+			ldapFilter = debug["ldapFilter"].string_value();
+			ldapIdAttribute = debug["ldapIdAttribute"].string_value();
+			ldapTimeAttribute = debug["ldapTimeAttribute"].string_value();
 
-			//elasticType = mongoCollection = ldapCollections[0];
+			auto &tds = config["tds"];
+
+			for (auto &channel : tds["channels"].object_items())
+			{
+				for (auto &topic : channel.second.array_items())
+				{
+					tdsCollections.push_back(topic["name"].string_value());
+				}
+			}
+
+			auto &ldap = config["ldap"];
+
+			for (auto &channel : ldap["channels"].object_items())
+			{
+				for (auto &topic : channel.second.array_items())
+				{
+					ldapCollections.push_back(topic["name"].string_value());
+				}
+			}
+
+			//mongoCollection = elasticType = ldapCollections[0];
+			mongoCollection = elasticType = tdsCollections[1];
 		}
 
 		void Run()
 		{
+			//LmdbTest();
 			//JsonBson();
-			//PrintStagingCopyCounts();
+			//PrintCopyCounts();
 
 			//CopyTds();
 			//CopyCorrectnessTest();
@@ -1019,6 +1111,7 @@ namespace Integro
 			//MongoQuery();
 			//ElasticCreateIndex();
 			//ElasticDeleteIndex();
+			//ElasticDeleteType();
 			//ElasticCount();
 			//ElasticQuery();
 		}

@@ -218,7 +218,7 @@ namespace Integro
 			DBSETLUSER(login, user.c_str());
 			DBSETLPWD(login, password.c_str());
 			DBSETLAPP(login, infin.ApplicationName.c_str());
-			
+
 			for (auto version = DBVERSION_74; dbproc == NULL && version >= DBTDS_UNKNOWN; --version)
 			{
 				DBSETLVERSION(login, version);
@@ -375,24 +375,55 @@ namespace Integro
 		{
 			auto result = LDAPResult::SUCCESS;
 			LDAPAsynConnection connection(host, port);
-			unique_ptr<LDAPMessageQueue>(connection.bind(user, password))->getNext();
+			auto queue = unique_ptr<LDAPMessageQueue>(connection.bind(user, password));
 
-			auto queue = unique_ptr<LDAPMessageQueue>(connection.search(
+			if (queue.get() == nullptr)
+			{
+				throw exception("ClientLdap::SearchSome(): bind has failed");
+			}
+
+			auto message = unique_ptr<LDAPMsg>(queue->getNext());
+
+			if (message.get() == nullptr)
+			{
+				throw exception("ClientLdap::SearchSome(): bind has failed");
+			}
+
+			queue = unique_ptr<LDAPMessageQueue>(connection.search(
 				node
 				//, LDAPAsynConnection::SEARCH_BASE
 				//, LDAPAsynConnection::SEARCH_ONE
 				, LDAPAsynConnection::SEARCH_SUB
 				, filter));
 
+			if (queue.get() == nullptr)
+			{
+				throw exception("ClientLdap::SearchSome(): search has failed");
+			}
+
 			for (auto cont = true; cont;)
 			{
-				auto message = unique_ptr<LDAPMsg>(queue->getNext());
+				message = unique_ptr<LDAPMsg>(queue->getNext());
+
+				if (message.get() == nullptr)
+				{
+					throw exception("ClientLdap::SearchSome(): search has failed");
+				}
+
 				auto type = message->getMessageType();
+				const LDAPEntry *entry = nullptr;
 
 				switch (type)
 				{
 					case LDAPMsg::SEARCH_ENTRY:
-						OnEntry(ToMave(*((LDAPSearchResult*)message.get())->getEntry()));
+						entry = ((LDAPSearchResult*)message.get())->getEntry();
+
+						if (entry == nullptr)
+						{
+							throw exception("ClientLdap::SearchSome(): search has failed");
+						}
+
+						OnEntry(ToMave(*entry));
 						break;
 					case LDAPMsg::SEARCH_REFERENCE:
 						break;
@@ -893,6 +924,24 @@ namespace Integro
 		}
 
 		static
+			void
+			DeleteType(
+			const string &url
+			, const string &index
+			, const string &type)
+		{
+			if (index == "" || type == "")
+			{
+				throw exception("ClientElastic::DeleteType(): index and type names are required");
+			}
+
+			string request = "DELETE";
+			string path = "/" + index + "/" + type;
+			stringstream content;
+			auto response = MakeRequest(url, request, path, content);
+		}
+
+		static
 			int
 			Count(
 			const string &url
@@ -1039,7 +1088,7 @@ namespace Integro
 
 			if (!TryGet(path, key, value))
 			{
-				throw exception("ClientLmdb::Get(): failed");
+				throw exception("ClientLmdb::Get(): failed to get the value of a key");
 			}
 
 			return value;
@@ -1065,21 +1114,55 @@ namespace Integro
 		{
 			value = "";
 
-			int rc;
-			MDB_env *env;
-			MDB_dbi dbi;
+			int rc = 0;
+			MDB_env *env = NULL;
+			MDB_dbi dbi = 0;
+			MDB_txn *txn = NULL;
 			MDB_val key_p, data_p;
-			MDB_txn *txn;
+			key_p.mv_data = NULL;
+			key_p.mv_size = 0;
+			data_p.mv_data = NULL;
+			data_p.mv_size = 0;
 
 			rc = mdb_env_create(&env);
-			rc |= mdb_env_open(env, path.c_str(), 0, 0664);
-			rc |= mdb_txn_begin(env, NULL, 0, &txn);
-			rc |= mdb_open(txn, NULL, 0, &dbi);
+
+			if (rc != 0)
+			{
+				mdb_env_close(env);
+				throw exception("ClientLmdb::TryGet(): failed to create an environment");
+			}
+
+			rc = mdb_env_open(env, path.c_str(), 0, 0664);
+
+			if (rc != 0)
+			{
+				mdb_env_close(env);
+				throw exception("ClientLmdb::TryGet(): failed to open an environment");
+			}
+
+			rc = mdb_txn_begin(env, NULL, 0, &txn);
+
+			if (rc != 0)
+			{
+				mdb_txn_abort(txn);
+				mdb_env_close(env);
+				throw exception("ClientLmdb::TryGet(): failed to begin a transaction");
+			}
+
+			rc = mdb_open(txn, NULL, 0, &dbi);
+
+			if (rc != 0)
+			{
+				mdb_txn_abort(txn);
+				mdb_close(env, dbi);
+				mdb_env_close(env);
+				throw exception("ClientLmdb::TryGet(): failed to open a database");
+			}
 
 			key_p.mv_data = (void*)key.data();
 			key_p.mv_size = strlen((const char*)key_p.mv_data);
 
-			rc |= mdb_get(txn, dbi, &key_p, &data_p);
+			rc = mdb_get(txn, dbi, &key_p, &data_p);
 
 			if (rc == 0)
 			{
@@ -1093,7 +1176,6 @@ namespace Integro
 			return (rc == 0);
 		}
 
-
 		static
 			void
 			Set(
@@ -1101,31 +1183,78 @@ namespace Integro
 			, const string &key
 			, const string &value)
 		{
-			int rc;
-			MDB_env *env;
-			MDB_dbi dbi;
+			int rc = 0;
+			MDB_env *env = NULL;
+			MDB_dbi dbi = 0;
+			MDB_txn *txn = NULL;
 			MDB_val key_p, data_p;
-			MDB_txn *txn;
+			key_p.mv_data = NULL;
+			key_p.mv_size = 0;
+			data_p.mv_data = NULL;
+			data_p.mv_size = 0;
 
 			rc = mdb_env_create(&env);
-			rc |= mdb_env_open(env, path.c_str(), 0, 0664);
-			rc |= mdb_txn_begin(env, NULL, 0, &txn);
-			rc |= mdb_open(txn, NULL, 0, &dbi);
+
+			if (rc != 0)
+			{
+				mdb_env_close(env);
+				throw exception("ClientLmdb::Set(): failed to create an environment");
+			}
+
+			rc = mdb_env_open(env, path.c_str(), 0, 0664);
+
+			if (rc != 0)
+			{
+				mdb_env_close(env);
+				throw exception("ClientLmdb::Set(): failed to open an environment");
+			}
+
+			rc = mdb_txn_begin(env, NULL, 0, &txn);
+
+			if (rc != 0)
+			{
+				mdb_txn_abort(txn);
+				mdb_env_close(env);
+				throw exception("ClientLmdb::Set(): failed to begin a transaction");
+			}
+
+			rc = mdb_open(txn, NULL, 0, &dbi);
+
+			if (rc != 0)
+			{
+				mdb_txn_abort(txn);
+				mdb_close(env, dbi);
+				mdb_env_close(env);
+				throw exception("ClientLmdb::Set(): failed to open a database");
+			}
 
 			key_p.mv_data = (void*)key.data();
 			key_p.mv_size = strlen((const char*)key_p.mv_data);
 			data_p.mv_data = (void*)value.data();
 			data_p.mv_size = strlen((const char*)data_p.mv_data);
 
-			rc |= mdb_put(txn, dbi, &key_p, &data_p, 0);
-			rc |= mdb_txn_commit(txn);
-			mdb_close(env, dbi);
-			mdb_env_close(env);
+			rc = mdb_put(txn, dbi, &key_p, &data_p, 0);
 
 			if (rc != 0)
 			{
-				throw exception("ClientLmdb::Set(): failed");
+				mdb_txn_abort(txn);
+				mdb_close(env, dbi);
+				mdb_env_close(env);
+				throw exception("ClientLmdb::Set(): failed to set the value of a key");
 			}
+
+			rc = mdb_txn_commit(txn);
+
+			if (rc != 0)
+			{
+				mdb_txn_abort(txn);
+				mdb_close(env, dbi);
+				mdb_env_close(env);
+				throw exception("ClientLmdb::Set(): failed to commit a transaction");
+			}
+
+			mdb_close(env, dbi);
+			mdb_env_close(env);
 		}
 
 		static
@@ -1134,38 +1263,148 @@ namespace Integro
 			const string &path
 			, const string &key)
 		{
-			int rc;
-			MDB_env *env;
-			MDB_dbi dbi;
-			MDB_val key_p, data_p;
-			MDB_txn *txn;
+			int rc = 0;
+			MDB_env *env = NULL;
+			MDB_dbi dbi = 0;
+			MDB_txn *txn = NULL;
+			MDB_val key_p;
+			key_p.mv_data = NULL;
+			key_p.mv_size = 0;
 
 			rc = mdb_env_create(&env);
-			rc |= mdb_env_open(env, path.c_str(), 0, 0664);
-			rc |= mdb_txn_begin(env, NULL, 0, &txn);
-			rc |= mdb_open(txn, NULL, 0, &dbi);
+
+			if (rc != 0)
+			{
+				mdb_env_close(env);
+				throw exception("ClientLmdb::Remove(): failed to create an environment");
+			}
+
+			rc = mdb_env_open(env, path.c_str(), 0, 0664);
+
+			if (rc != 0)
+			{
+				mdb_env_close(env);
+				throw exception("ClientLmdb::Remove(): failed to open an environment");
+			}
+
+			rc = mdb_txn_begin(env, NULL, 0, &txn);
+
+			if (rc != 0)
+			{
+				mdb_txn_abort(txn);
+				mdb_env_close(env);
+				throw exception("ClientLmdb::Remove(): failed to begin a transaction");
+			}
+
+			rc = mdb_open(txn, NULL, 0, &dbi);
+
+			if (rc != 0)
+			{
+				mdb_txn_abort(txn);
+				mdb_close(env, dbi);
+				mdb_env_close(env);
+				throw exception("ClientLmdb::Remove(): failed to open a database");
+			}
 
 			key_p.mv_data = (void*)key.data();
 			key_p.mv_size = strlen((const char*)key_p.mv_data);
 
-			rc |= mdb_del(txn, dbi, &key_p, NULL);
+			rc = mdb_del(txn, dbi, &key_p, NULL);
 
-			if (rc == 0)
-			{
-				rc |= mdb_txn_commit(txn);
-			}
-			else
+			if (rc != 0)
 			{
 				mdb_txn_abort(txn);
+				mdb_close(env, dbi);
+				mdb_env_close(env);
+				throw exception("ClientLmdb::Remove(): failed to remove a key");
+			}
+
+			rc = mdb_txn_commit(txn);
+
+			if (rc != 0)
+			{
+				mdb_txn_abort(txn);
+				mdb_close(env, dbi);
+				mdb_env_close(env);
+				throw exception("ClientLmdb::Remove(): failed to commit a transaction");
 			}
 
 			mdb_close(env, dbi);
 			mdb_env_close(env);
+		}
+
+		static
+			void
+			Query(
+			const string &path
+			, function<void(const string &key, const string &value)> OnKyeValue)
+		{
+			int rc = 0;
+			MDB_env *env = NULL;
+			MDB_dbi dbi = 0;
+			MDB_txn *txn = NULL;
+			MDB_val key_p, data_p;
+			key_p.mv_data = NULL;
+			key_p.mv_size = 0;
+			data_p.mv_data = NULL;
+			data_p.mv_size = 0;
+			MDB_cursor *cursor = NULL;
+
+			rc = mdb_env_create(&env);
 
 			if (rc != 0)
 			{
-				throw exception("ClientLmdb::Remove(): failed");
+				mdb_env_close(env);
+				throw exception("ClientLmdb::Remove(): failed to create an environment");
 			}
+
+			rc = mdb_env_open(env, path.c_str(), 0, 0664);
+
+			if (rc != 0)
+			{
+				mdb_env_close(env);
+				throw exception("ClientLmdb::Set(): failed to open an environment");
+			}
+
+			rc = mdb_txn_begin(env, NULL, 0, &txn);
+
+			if (rc != 0)
+			{
+				mdb_txn_abort(txn);
+				mdb_env_close(env);
+				throw exception("ClientLmdb::Remove(): failed to begin a transaction");
+			}
+
+			rc = mdb_open(txn, NULL, 0, &dbi);
+
+			if (rc != 0)
+			{
+				mdb_txn_abort(txn);
+				mdb_close(env, dbi);
+				mdb_env_close(env);
+				throw exception("ClientLmdb::Remove(): failed to open a database");
+			}
+
+			rc = mdb_cursor_open(txn, dbi, &cursor);
+
+			if (rc != 0)
+			{
+				mdb_cursor_close(cursor);
+				mdb_txn_abort(txn);
+				mdb_close(env, dbi);
+				mdb_env_close(env);
+				throw exception("ClientLmdb::Remove(): failed to open a cursor");
+			}
+
+			while (0 == (rc = mdb_cursor_get(cursor, &key_p, &data_p, MDB_NEXT)))
+			{
+				OnKyeValue(string((const char*)key_p.mv_data, key_p.mv_size), string((const char*)data_p.mv_data, data_p.mv_size));
+			}
+
+			mdb_cursor_close(cursor);
+			mdb_txn_abort(txn);
+			mdb_close(env, dbi);
+			mdb_env_close(env);
 		}
 	};
 }
