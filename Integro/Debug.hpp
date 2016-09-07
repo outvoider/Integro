@@ -890,27 +890,45 @@ namespace Integro
 
 		void JsonBson()
 		{
-			Mave l("aaa");
-			vector<Mave> a1 = { nullptr, true, l, "bbb" };
-			map<string, Mave> o1 = { { "#", 1 }, { "complex", false } };
-			vector<Mave> a2 = { 3, milliseconds(1), "ccc", a1, o1 };
-			map<string, Mave> o2 = { { "l", 2 }, { "complex", true }, { "object", o1 }, { "array", a1 }, { "array2", a2 } };
+			map<string, Mave> o1 = { { "#", 1 }, { "d", vector<Mave>({ "Monday", "Tuesday" }) } };
+			Mave m1 = o1;
+			auto b1 = ToBson(m1);
 
-			auto bo = ToBson(o2);
-			auto mo1 = ToMave(bo);
-			auto jo = ToJson(mo1);
-			auto mo2 = ToMave(jo);
+			mongo::BSONObjBuilder bo;
+			mongo::BSONArrayBuilder ba;
+			ba.append("Monday");
+			ba.append("Tuesday");
+			bo.append("#", 1);
+			bo.append("d", (mongo::BSONArray)((mongo::BSONObj)ba.arr()));
+			auto b2 = bo.obj();
 
-			cout << ToString(o2) << endl;
+			cout << ToString(m1) << endl;
 			cout << "-----------------------------------" << endl;
-			cout << bo.jsonString() << endl;
+			cout << b1.jsonString() << endl;
 			cout << "-----------------------------------" << endl;
-			cout << ToString(mo1) << endl;
-			cout << "-----------------------------------" << endl;
-			cout << jo.dump() << endl;
-			cout << "-----------------------------------" << endl;
-			cout << ToString(mo2) << endl;
-			cout << "-----------------------------------" << endl;
+			cout << b2.jsonString() << endl;
+
+			//Mave l("aaa");
+			//vector<Mave> a1 = { nullptr, true, l, "bbb" };
+			//map<string, Mave> o1 = { { "#", 1 }, { "complex", false } };
+			//vector<Mave> a2 = { 3, milliseconds(1), "ccc", a1, o1 };
+			//map<string, Mave> o2 = { { "l", 2 }, { "complex", true }, { "object", o1 }, { "array", a1 }, { "array2", a2 } };
+
+			//auto bo = ToBson(o2);
+			//auto mo1 = ToMave(bo);
+			//auto jo = ToJson(mo1);
+			//auto mo2 = ToMave(jo);
+
+			//cout << ToString(o2) << endl;
+			//cout << "-----------------------------------" << endl;
+			//cout << bo.jsonString() << endl;
+			//cout << "-----------------------------------" << endl;
+			//cout << ToString(mo1) << endl;
+			//cout << "-----------------------------------" << endl;
+			//cout << jo.dump() << endl;
+			//cout << "-----------------------------------" << endl;
+			//cout << ToString(mo2) << endl;
+			//cout << "-----------------------------------" << endl;
 		}
 
 		void PrintCopyCounts()

@@ -164,6 +164,17 @@ namespace Integro
 			return 0;
 		}
 
+		static
+			string
+			ToTrimmedString(
+			char *begin
+			, char *end)
+		{
+			for (; begin < end && *begin == ' '; ++begin);
+			for (; begin < end && *(end - 1) == ' '; --end);
+			return string(begin, end);
+		}
+
 		DBPROCESS *dbproc = NULL;
 
 	public:
@@ -300,8 +311,7 @@ namespace Integro
 										throw exception("ClientTds::FetchResults(): failed to fetch column data, insufficient buffer space");
 									}
 
-									buffer[count] = 0;
-									row.insert({ columns[i], (char*)&buffer[0] });
+									row.insert({ columns[i], ToTrimmedString((char*)&buffer[0], (char*)&buffer[count]) });
 								}
 							}
 
@@ -1355,7 +1365,7 @@ namespace Integro
 			if (rc != 0)
 			{
 				mdb_env_close(env);
-				throw exception("ClientLmdb::Remove(): failed to create an environment");
+				throw exception("ClientLmdb::Query(): failed to create an environment");
 			}
 
 			rc = mdb_env_open(env, path.c_str(), 0, 0664);
@@ -1363,7 +1373,7 @@ namespace Integro
 			if (rc != 0)
 			{
 				mdb_env_close(env);
-				throw exception("ClientLmdb::Set(): failed to open an environment");
+				throw exception("ClientLmdb::Query(): failed to open an environment");
 			}
 
 			rc = mdb_txn_begin(env, NULL, 0, &txn);
@@ -1372,7 +1382,7 @@ namespace Integro
 			{
 				mdb_txn_abort(txn);
 				mdb_env_close(env);
-				throw exception("ClientLmdb::Remove(): failed to begin a transaction");
+				throw exception("ClientLmdb::Query(): failed to begin a transaction");
 			}
 
 			rc = mdb_open(txn, NULL, 0, &dbi);
@@ -1382,7 +1392,7 @@ namespace Integro
 				mdb_txn_abort(txn);
 				mdb_close(env, dbi);
 				mdb_env_close(env);
-				throw exception("ClientLmdb::Remove(): failed to open a database");
+				throw exception("ClientLmdb::Query(): failed to open a database");
 			}
 
 			rc = mdb_cursor_open(txn, dbi, &cursor);
@@ -1393,7 +1403,7 @@ namespace Integro
 				mdb_txn_abort(txn);
 				mdb_close(env, dbi);
 				mdb_env_close(env);
-				throw exception("ClientLmdb::Remove(): failed to open a cursor");
+				throw exception("ClientLmdb::Query(): failed to open a cursor");
 			}
 
 			while (0 == (rc = mdb_cursor_get(cursor, &key_p, &data_p, MDB_NEXT)))

@@ -2,7 +2,7 @@ Integro documentation.
 
 Author: Michael Ostapenko
 
-Version: 2.1
+Version: 2.2
 
 Dependencies:
 
@@ -498,6 +498,17 @@ static
 
 	A private callback for a freetds dblib library that formats its error/informative messages and passes them to Infin's OnError/OnEvent.
 	See dblib for the descriptions of parameters.
+
+static
+	string
+	ToTrimmedString(
+	char *begin
+	, char *end)
+
+	begin		a pointer to the beginning of a string
+	end			a pointer to the end of a string
+
+	Constructs a string from an input character array without leading and trailing spaces.
 
 	Infin methods.
 

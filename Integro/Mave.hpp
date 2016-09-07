@@ -444,8 +444,10 @@ namespace Integro
 							bo.append(i.first, i.second.AsString());
 							break;
 						case Mave::Type::MAP:
-						case Mave::Type::VECTOR:
 							bo.append(i.first, ToBson(i.second));
+							break;
+						case Mave::Type::VECTOR:
+							bo.append(i.first, (mongo::BSONArray)ToBson(i.second));
 							break;
 						default:
 							throw exception("Mave::ToBson(): unsupported type encountered");
@@ -482,8 +484,10 @@ namespace Integro
 							ba.append(i.AsString());
 							break;
 						case Mave::Type::MAP:
-						case Mave::Type::VECTOR:
 							ba.append(ToBson(i));
+							break;
+						case Mave::Type::VECTOR:
+							ba.append((mongo::BSONArray)ToBson(i));
 							break;
 						default:
 							throw exception("Mave::ToBson(): unsupported type encountered");
