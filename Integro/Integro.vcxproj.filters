@@ -12,7 +12,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="configs\config.json" />
-    <None Include="configs\debug.json" />
     <None Include="..\README.md" />
   </ItemGroup>
   <ItemGroup>

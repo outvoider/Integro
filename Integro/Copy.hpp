@@ -522,30 +522,33 @@ namespace Integro
 		{
 			return [=](vector<Mave> &data) mutable
 			{
-				for (auto & datum : data)
+				for (auto &datum : data)
 				{
-					auto &m = datum.AsMap();
-
-					//m["_uid"] = ;	should be there, although not unique
-					m["action"] = action;
-					m["channel"] = channelName;
-					m["model"] = model;
-					m["modelName"] = modelName;
-					m["processed"] = 0;
-					m["start_time"] = UtcToMilliseconds(m["start_time"].AsString());
-
-					if (m.count("forType") > 0)
+					datum = map<string, Mave>(
 					{
-						m["modelName"] = m["forType"].AsString();
-						m["model"] = regex_replace(m["forType"].AsString(), regex("[[:punct:]|[:space:]]"), "");
+						{ "_id", boost::uuids::to_string(boost::uuids::random_generator()()) }
+						, { "action", action }
+						, { "channel", channelName }
+						, { "model", model }
+						, { "modelName", modelName }
+						, { "processed", 0 }
+						, { "start_time", UtcToMilliseconds(datum["start_time"].AsString()) }
+						, { "source", datum }
+					});
+
+					auto &d = datum.AsMap();
+					auto &s = d["source"].AsMap();
+
+					if (s.count("forType") > 0)
+					{
+						d["modelName"] = s["forType"].AsString();
+						d["model"] = regex_replace(s["forType"].AsString(), regex("[[:punct:]|[:space:]]"), "");
 					}
 
 					if (targetStores.size() > 0)
 					{
-						m["targetStores"] = targetStores;
+						d["targetStores"] = targetStores;
 					}
-
-					m["_id"] = boost::uuids::to_string(boost::uuids::random_generator()());
 				}
 			};
 		}
@@ -561,48 +564,19 @@ namespace Integro
 		{
 			return [=](vector<Mave> &data) mutable
 			{
-				for (auto & datum : data)
+				for (auto &datum : data)
 				{
-					// DateTime
+					datum = map<string, Mave>(
 					{
-						for (auto a :
-						{
-							"msExchWhenMailboxCreated"
-							, "msTSExpireDate"
-							, "whenChanged"
-							, "whenCreated"
-							, "dSCorePropagationData"
-						})
-						{
-							if (datum.AsMap().count(a) > 0)
-							{
-								auto &o = datum[a];
-
-								if (!o.IsVector())
-								{
-									o = max(milliseconds::zero(), LdapTimeToMilliseconds(o.AsString()));
-								}
-								else
-								{
-									for (auto &i : o.AsVector())
-									{
-										i = max(milliseconds::zero(), LdapTimeToMilliseconds(i.AsString()));
-									}
-								}
-							}
-						}
-					}
-
-					auto &m = datum.AsMap();
-
-					m["_uid"] = m[idAttribute].AsString();
-					m["action"] = action;
-					m["channel"] = channelName;
-					m["model"] = model;
-					m["modelName"] = modelName;
-					m["processed"] = 0;
-					m["start_time"] = duration_cast<milliseconds>(chrono::system_clock::now().time_since_epoch());
-					m["_id"] = m[idAttribute].AsString();
+						{ "_id", datum[idAttribute].AsString() }
+						, { "action", action }
+						, { "channel", channelName }
+						, { "model", model }
+						, { "modelName", modelName }
+						, { "processed", 0 }
+						, { "start_time", duration_cast<milliseconds>(chrono::system_clock::now().time_since_epoch()) }
+						, { "source", datum }
+					});
 				}
 			};
 		}
@@ -641,9 +615,11 @@ namespace Integro
 							, "thumbnailPhoto"
 						})
 						{
-							if (datum.AsMap().count(a) > 0)
+							auto &s = datum["source"].AsMap();
+
+							if (s.count(a) > 0)
 							{
-								auto &o = datum[a];
+								auto &o = s[a];
 
 								if (!o.IsVector())
 								{
@@ -681,9 +657,11 @@ namespace Integro
 							, "extensionAttribute15"
 						})
 						{
-							if (datum.AsMap().count(a) > 0)
+							auto &s = datum["source"].AsMap();
+
+							if (s.count(a) > 0)
 							{
-								auto &o = datum[a];
+								auto &o = s[a];
 
 								if (!o.IsVector())
 								{
@@ -715,16 +693,17 @@ namespace Integro
 			{
 				for (auto & datum : data)
 				{
-					auto &m = datum.AsMap();
-
-					m["_uid"] = m["_id"];
-					m["action"] = action;
-					m["channel"] = channelName;
-					m["model"] = model;
-					m["modelName"] = modelName;
-					m["processed"] = 0;
-					//m["start_time"] = ;	should be there
-					m["_id"] = boost::uuids::to_string(boost::uuids::random_generator()());
+					datum = map<string, Mave>(
+					{
+						{ "_id", boost::uuids::to_string(boost::uuids::random_generator()()) }
+						, { "action", action }
+						, { "channel", channelName }
+						, { "model", model }
+						, { "modelName", modelName }
+						, { "processed", 0 }
+						, { "start_time", datum["start_time"].AsString() }
+						, { "source", datum }
+					});
 				}
 			};
 		}
@@ -831,8 +810,8 @@ namespace Integro
 		static
 			function<void(vector<Mave>&)>
 			RemoveDuplicates(
-			const string &idAttribute
-			, const string &descriptorAttribute
+			const string &descriptorAttribute
+			, const string &sourceAttribute
 			, function<void(const string&, vector<int>&, function<void(Mave&)>)> LoadData)
 		{
 			return [=](vector<Mave> &data) mutable
@@ -842,34 +821,22 @@ namespace Integro
 					return;
 				}
 
-				vector<int> descriptorValues;
+				vector<int> descriptors;
 
 				for (auto &datum : data)
 				{
-					auto &m = datum.AsMap();
-					auto id = m[idAttribute];
-					m.erase(idAttribute);
-					m.erase(descriptorAttribute);
-					auto hash = Hash(datum);
-					m[descriptorAttribute] = hash;
-					m[idAttribute] = id;
-					descriptorValues.push_back(hash);
+					auto descriptor = Hash(datum[sourceAttribute]);
+					datum.AsMap().insert({ descriptorAttribute, descriptor });
+					descriptors.push_back(descriptor);
 				}
 
 				set<int> storedDescriptors;
-				set<string> storedStrings;
+				set<string> storedSources;
 
-				LoadData(descriptorAttribute, descriptorValues, [&](Mave &datum)
+				LoadData(descriptorAttribute, descriptors, [&](Mave &datum)
 				{
-					auto &m = datum.AsMap();
-					auto id = m[idAttribute];
-					auto hash = m[descriptorAttribute];
-					m.erase(idAttribute);
-					m.erase(descriptorAttribute);
-					storedStrings.insert(ToString(datum));
-					m[idAttribute] = id;
-					m[descriptorAttribute] = hash;
-					storedDescriptors.insert(hash.AsInt());
+					storedSources.insert(ToString(datum[sourceAttribute]));
+					storedDescriptors.insert(datum[descriptorAttribute].AsInt());
 				});
 
 				if (storedDescriptors.size() == 0)
@@ -881,25 +848,10 @@ namespace Integro
 
 				for (auto &datum : data)
 				{
-					if (storedDescriptors.count(datum[descriptorAttribute].AsInt()) == 0)
+					if (storedDescriptors.count(datum[descriptorAttribute].AsInt()) == 0
+						|| storedSources.count(ToString(datum[sourceAttribute])) == 0)
 					{
 						noDuplicatesData.push_back(datum);
-					}
-					else
-					{
-						auto &m = datum.AsMap();
-						auto id = m[idAttribute];
-						auto hash = m[descriptorAttribute];
-						m.erase(idAttribute);
-						m.erase(descriptorAttribute);
-						auto n = storedStrings.count(ToString(datum));
-						m[idAttribute] = id;
-						m[descriptorAttribute] = hash;
-
-						if (n == 0)
-						{
-							noDuplicatesData.push_back(datum);
-						}
 					}
 				}
 

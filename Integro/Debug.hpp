@@ -12,12 +12,14 @@ namespace Integro
 		minstd_rand rand;
 		atomic_flag lock;
 
+		string environment;
 		string metadataPath;
 		string startIdKey;
 		string startTimeKey;
 
 		string idAttribute;
 		string descriptorAttribute;
+		string sourceAttribute;
 		string timeAttribute;
 
 		string channelName;
@@ -33,22 +35,12 @@ namespace Integro
 		string tdsQuery;
 		vector<string> tdsCollections;
 
-		string mongoLocalUrl;
-		string mongoRemoteUrl;
 		string mongoUrl;
-		string mongoTestDatabase;
-		string mongoStagingDatabase;
 		string mongoDatabase;
-		string mongoCapped;
-		string mongoSource;
-		string mongoDestination;
 		string mongoCollection;
+		string mongoCapped;
 
-		string elasticLocalUrl;
-		string elasticRemoteUrl;
 		string elasticUrl;
-		string elasticTestIndex;
-		string elasticStagingIndex;
 		string elasticIndex;
 		string elasticType;
 
@@ -72,18 +64,6 @@ namespace Integro
 			}
 
 			return s.str();
-		}
-
-		vector<string> ToStringVector(const Json &stringArray)
-		{
-			vector<string> strings;
-
-			for (auto &i : stringArray.array_items())
-			{
-				strings.push_back(i.string_value());
-			}
-
-			return strings;
 		}
 
 		string Escape(string input)
@@ -309,9 +289,9 @@ namespace Integro
 		{
 			auto LoadData = Copy::LoadDataTds(tdsHost, tdsUser, tdsPassword, tdsDatabase, tdsQuery);
 			auto ProcessData = Copy::ProcessDataTds(channelName, modelName, model, topicName, targetStores);
-			auto LoadDuplicateData = Copy::LoadDuplicateDataMongo(mongoUrl, mongoDatabase, mongoDestination, descriptorAttribute);
-			auto RemoveDuplicates = Copy::RemoveDuplicates(idAttribute, descriptorAttribute, LoadDuplicateData);
-			auto SaveDataMongo = Copy::SaveDataMongo(mongoUrl, mongoDatabase, mongoDestination);
+			auto LoadDuplicateData = Copy::LoadDuplicateDataMongo(mongoUrl, mongoDatabase, mongoCollection, descriptorAttribute);
+			auto RemoveDuplicates = Copy::RemoveDuplicates(descriptorAttribute, sourceAttribute, LoadDuplicateData);
+			auto SaveDataMongo = Copy::SaveDataMongo(mongoUrl, mongoDatabase, mongoCollection);
 			auto SaveDataElastic = Copy::SaveDataElastic(elasticUrl, elasticIndex, elasticType);
 			auto SaveData = [=](vector<Mave> &data) mutable
 			{
@@ -333,10 +313,7 @@ namespace Integro
 
 		void CopyCorrectnessTest()
 		{
-			string contentAttribute = "content";
-			string timeAttribute = "time";
-			string descriptorAttribute = "descriptor";
-			string idAttribute = "id";
+			string dataAttribute = "data";
 			bool hasMoreData = true;
 			int idCount = 0;
 			int startTime = 0;
@@ -346,7 +323,7 @@ namespace Integro
 
 			for (int i = 0, t = 0; i < 100000; ++i)
 			{
-				source.push_back(Mave(map<string, Mave>({ { contentAttribute, i }, { timeAttribute, (Rand() % 10 != 0) ? t : t++ } })));
+				source.push_back(Mave(map<string, Mave>({ { sourceAttribute, map<string, Mave>({ { dataAttribute, i } }) }, { timeAttribute, (Rand() % 10 != 0) ? t : t++ } })));
 			}
 
 			auto LoadData = [&](int startTime, function<void(Mave&)> OnDatum)
@@ -371,7 +348,7 @@ namespace Integro
 				hasMoreData = false;
 			};
 
-			auto RemoveDuplicates = Copy::RemoveDuplicates(idAttribute, descriptorAttribute
+			auto RemoveDuplicates = Copy::RemoveDuplicates(descriptorAttribute, sourceAttribute
 				, [&](const string &attribute, vector<int> &values, function<void(Mave&)> OnDatum)
 			{
 				TryThrow(1, "failed to remove duplicates");
@@ -446,7 +423,7 @@ namespace Integro
 
 			for (auto d : source)
 			{
-				if (!sourceData.insert({ d[contentAttribute].AsInt(), d }).second)
+				if (!sourceData.insert({ d[sourceAttribute][dataAttribute].AsInt(), d }).second)
 				{
 					result = false;
 					cout << "duplicate in source data: " << ToString(d) << endl;
@@ -455,7 +432,7 @@ namespace Integro
 
 			for (auto d : dest)
 			{
-				if (!destData.insert({ d.second[contentAttribute].AsInt(), d.second }).second)
+				if (!destData.insert({ d.second[sourceAttribute][dataAttribute].AsInt(), d.second }).second)
 				{
 					result = false;
 					cout << "duplicate in destination data: " << ToString(d.second) << endl;
@@ -517,10 +494,11 @@ namespace Integro
 					map<string, Mave> m;
 					m[countAttribute] = i;
 					m[timeAttribute] = MillisecondsToUtc(time, true);
+					auto &s = (m[sourceAttribute] = map<string, Mave>()).AsMap();
 
 					for (int i = 0; i < text.size(); ++i)
 					{
-						m[to_string(i)] = text[i];
+						s[to_string(i)] = text[i];
 					}
 
 					source.push_back(m);
@@ -552,9 +530,9 @@ namespace Integro
 			};
 
 			auto ProcessData = Copy::ProcessDataTds(channelName, modelName, model, topicName, targetStores);
-			auto LoadDuplicateData = Copy::LoadDuplicateDataMongo(mongoUrl, mongoDatabase, mongoDestination, descriptorAttribute);
-			auto RemoveDuplicates = Copy::RemoveDuplicates(idAttribute, descriptorAttribute, LoadDuplicateData);
-			auto SaveDataMongo = Copy::SaveDataMongo(mongoUrl, mongoDatabase, mongoDestination);
+			auto LoadDuplicateData = Copy::LoadDuplicateDataMongo(mongoUrl, mongoDatabase, mongoCollection, descriptorAttribute);
+			auto RemoveDuplicates = Copy::RemoveDuplicates(descriptorAttribute, sourceAttribute, LoadDuplicateData);
+			auto SaveDataMongo = Copy::SaveDataMongo(mongoUrl, mongoDatabase, mongoCollection);
 			auto SaveDataElastic = Copy::SaveDataElastic(elasticUrl, elasticIndex, elasticType);
 			auto SaveData = [=](vector<Mave> &data) mutable
 			{
@@ -650,10 +628,11 @@ namespace Integro
 					map<string, Mave> m;
 					m[timeAttribute] = MillisecondsToUtc(time, true);
 					m[countAttribute] = ++count;
+					auto &s = (m[sourceAttribute] = map<string, Mave>()).AsMap();
 
 					for (int i = 0; i < sv.size(); ++i)
 					{
-						m[to_string(i)] = sv[i];
+						s[to_string(i)] = sv[i];
 					}
 
 					maves.push_back(m);
@@ -672,9 +651,9 @@ namespace Integro
 			};
 
 			auto ProcessData = Copy::ProcessDataTds(channelName, modelName, model, topicName, targetStores);
-			auto LoadDuplicateData = Copy::LoadDuplicateDataMongo(mongoUrl, mongoDatabase, mongoDestination, descriptorAttribute);
-			auto RemoveDuplicates = Copy::RemoveDuplicates(idAttribute, descriptorAttribute, LoadDuplicateData);
-			auto SaveDataMongo = Copy::SaveDataMongo(mongoUrl, mongoDatabase, mongoDestination);
+			auto LoadDuplicateData = Copy::LoadDuplicateDataMongo(mongoUrl, mongoDatabase, mongoCollection, descriptorAttribute);
+			auto RemoveDuplicates = Copy::RemoveDuplicates(descriptorAttribute, sourceAttribute, LoadDuplicateData);
+			auto SaveDataMongo = Copy::SaveDataMongo(mongoUrl, mongoDatabase, mongoCollection);
 			auto SaveDataElastic = Copy::SaveDataElastic(elasticUrl, elasticIndex, elasticType);
 			auto SaveData = [=](vector<Mave> &data) mutable
 			{
@@ -1013,18 +992,8 @@ namespace Integro
 
 			stringstream buffer;
 			string error;
-			ifstream debugInput("configs\\debug.json");
-			buffer << debugInput.rdbuf();
-			auto debug = Json::parse(buffer.str(), error);
-
-			if (error != "")
-			{
-				throw exception("failed to parse config file");
-			}
-
-			buffer.str("");
-			ifstream configInput("configs\\config.json");
-			buffer << configInput.rdbuf();
+			ifstream input("configs\\config.json");
+			buffer << input.rdbuf();
 			auto config = Json::parse(buffer.str(), error);
 
 			if (error != "")
@@ -1032,57 +1001,29 @@ namespace Integro
 				throw exception("failed to parse config file");
 			}
 
-			metadataPath = debug["metadataPath"].string_value();
-			startIdKey = debug["startIdKey"].string_value();
-			startTimeKey = debug["startTimeKey"].string_value();
+			environment = "staging";
+			metadataPath = "metadata";
+			startIdKey = "test_integro:id";
+			startTimeKey = "test_integro:start_time";
 
-			idAttribute = debug["idAttribute"].string_value();
-			descriptorAttribute = debug["descriptorAttribute"].string_value();
-			timeAttribute = debug["timeAttribute"].string_value();
+			idAttribute = "_id";
+			descriptorAttribute = "descriptor";
+			sourceAttribute = "source";
+			timeAttribute = "start_time";
 
-			channelName = debug["channelName"].string_value();
-			topicName = debug["topicName"].string_value();
-			modelName = debug["modelName"].string_value();
-			model = debug["model"].string_value();
-			targetStores = ToStringVector(debug["targetStores"]);
-
-			tdsHost = debug["tdsHost"].string_value();
-			tdsUser = debug["tdsUser"].string_value();
-			tdsPassword = debug["tdsPassword"].string_value();
-			tdsDatabase = debug["tdsDatabase"].string_value();
-			tdsQuery = Concatenate(debug["tdsQuery"]);
-
-			mongoLocalUrl = debug["mongoLocalUrl"].string_value();
-			mongoRemoteUrl = debug["mongoRemoteUrl"].string_value();
-			mongoUrl = mongoRemoteUrl;
-			mongoTestDatabase = debug["mongoTestDatabase"].string_value();
-			mongoStagingDatabase = debug["mongoStagingDatabase"].string_value();
-			mongoDatabase = mongoTestDatabase;
-			//mongoDatabase = mongoStagingDatabase;
-			mongoCapped = debug["mongoCapped"].string_value();
-			mongoSource = debug["mongoSource"].string_value();
-			mongoDestination = debug["mongoDestination"].string_value();
-			mongoCollection = mongoDestination;
-
-			elasticLocalUrl = debug["elasticLocalUrl"].string_value();
-			elasticRemoteUrl = debug["elasticRemoteUrl"].string_value();
-			elasticUrl = elasticRemoteUrl;
-			elasticTestIndex = debug["elasticTestIndex"].string_value();
-			elasticStagingIndex = debug["elasticStagingIndex"].string_value();
-			elasticIndex = elasticTestIndex;
-			//elasticIndex = elasticStagingIndex;
-			elasticType = debug["elasticType"].string_value();
-
-			ldapHost = debug["ldapHost"].string_value();
-			ldapPort = debug["ldapPort"].int_value();
-			ldapUser = debug["ldapUser"].string_value();
-			ldapPassword = debug["ldapPassword"].string_value();
-			ldapNode = debug["ldapNode"].string_value();
-			ldapFilter = debug["ldapFilter"].string_value();
-			ldapIdAttribute = debug["ldapIdAttribute"].string_value();
-			ldapTimeAttribute = debug["ldapTimeAttribute"].string_value();
+			channelName = "test";
+			topicName = "test";
+			modelName = "test";
+			model = "test";
+			targetStores = { "dummy" };
 
 			auto &tds = config["tds"];
+			auto &tdsConnection = tds["connections"].object_items().begin()->second[environment];
+			tdsHost = tdsConnection["host"].string_value();
+			tdsUser = tdsConnection["user"].string_value();
+			tdsPassword = tdsConnection["pass"].string_value();
+			tdsDatabase = tdsConnection["database"].string_value();
+			tdsQuery = Concatenate(tds["channels"][tds["connections"].object_items().begin()->first][0]["script"]);
 
 			for (auto &channel : tds["channels"].object_items())
 			{
@@ -1092,7 +1033,30 @@ namespace Integro
 				}
 			}
 
+			auto &mongo = config["mongo"];
+			auto &mongoConnection = mongo["connections"]["one"][environment];
+			mongoUrl = "mongodb://" + mongoConnection["host"].string_value() + ":" + mongoConnection["port"].string_value();;
+			mongoDatabase = mongoConnection["database"].string_value();
+			mongoCollection = "destination";
+			mongoCapped = "capped";
+
+			auto &elastic = config["elastic"];
+			auto &elasticConnection = elastic["connections"]["one"][environment];
+			elasticUrl = elasticConnection["host"].string_value() + ":" + elasticConnection["port"].string_value();
+			elasticIndex = elasticConnection["index"].string_value();
+			elasticType = "destination";
+
 			auto &ldap = config["ldap"];
+			auto &ldapConnection = ldap["connections"].object_items().begin()->second[environment];
+			auto &ldapTopic = ldap["channels"].object_items().begin()->second[0];
+			ldapHost = ldapConnection["host"].string_value();
+			ldapPort = stoi(ldapConnection["port"].string_value());
+			ldapUser = ldapConnection["user"].string_value();
+			ldapPassword = ldapConnection["pass"].string_value();
+			ldapNode = ldapTopic["node"].string_value();
+			ldapFilter = ldapTopic["filter"].string_value();
+			ldapIdAttribute = ldapTopic["idAttribute"].string_value();
+			ldapTimeAttribute = ldapTopic["timeAttribute"].string_value();
 
 			for (auto &channel : ldap["channels"].object_items())
 			{
@@ -1103,7 +1067,7 @@ namespace Integro
 			}
 
 			//mongoCollection = elasticType = ldapCollections[0];
-			mongoCollection = elasticType = tdsCollections[1];
+			//mongoCollection = elasticType = tdsCollections[1];
 		}
 
 		void Run()

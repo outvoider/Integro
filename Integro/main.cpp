@@ -8,7 +8,7 @@
 #include "Integro.hpp"
 #include "Debug.hpp"
 
-auto INTEGRO_VERSION = "2.0";
+auto INTEGRO_VERSION = "2.3";
 
 int
 	main(

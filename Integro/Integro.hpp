@@ -220,7 +220,8 @@ namespace Integro
 					auto mongoDatabase = mongoConnectionOne["database"].string_value();
 					auto mongoCollection = topic["name"].string_value();
 					auto idAttribute = "_id";
-					auto descriptorAttribute = "descriptor_dhet";
+					auto descriptorAttribute = "descriptor";
+					auto sourceAttribute = "source";
 					auto channelName = channel.first;
 					auto modelName = topic["modelName"].string_value();
 					auto model = topic["model"].string_value();
@@ -231,7 +232,7 @@ namespace Integro
 					auto LoadData = Copy::LoadDataTds(tdsHost, tdsUser, tdsPassword, tdsDatabase, tdsQuery);
 					auto ProcessData = Copy::ProcessDataTds(channelName, modelName, model, action, targetStores);
 					auto LoadDuplicateData = Copy::LoadDuplicateDataMongo(mongoUrl, mongoDatabase, mongoCollection, descriptorAttribute);
-					auto RemoveDuplicates = Copy::RemoveDuplicates(idAttribute, descriptorAttribute, LoadDuplicateData);
+					auto RemoveDuplicates = Copy::RemoveDuplicates(descriptorAttribute, sourceAttribute, LoadDuplicateData);
 					auto SaveDataMongo = Copy::SaveDataMongo(mongoUrl, mongoDatabase, mongoCollection);
 					auto SaveDataElastic = Copy::SaveDataElastic(elasticUrl, elasticIndex, elasticType);
 					auto SaveData = [=](vector<Mave> &data) mutable

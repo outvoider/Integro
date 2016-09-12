@@ -2,7 +2,7 @@ Integro documentation.
 
 Author: Michael Ostapenko
 
-Version: 2.2
+Version: 2.3
 
 Dependencies:
 
@@ -371,18 +371,18 @@ static
 static
 	function<void(vector<Mave>&)>
 	RemoveDuplicates(
-	const string &idAttribute
-	, const string &descriptorAttribute
+	const string &descriptorAttribute
+	, const string &sourceAttribute
 	, function<void(const string&, vector<int>&, function<void(Mave&)>)> LoadData)
 
-	idAttribute				a name of an id attribute in a datum
 	descriptorAttribute		a name of a descriptor attribute in a datum
+	sourceAttribute			a name of a source attribute in a datum
 	LoadData				expected to load data with provided descriptor attribute's values
 
 	Retuns a function that removes datums which are already present in a data store from data to be filtered.
 	Data to be filtered is expected to be passed from the aforementioned 'decorated' SaveData... functions.
-	A descriptorAttribute attribute is added to each datum, therefore descriptorAttribute should be as unique as possible.
-	A descriptorAttribute attribute's value is a hash of a datum excluding its idAttribute attribute.
+	A descriptorAttribute attribute is added to each datum.
+	A descriptorAttribute attribute's value is a hash of a sourceAttribute attribute's value.
 	RemoveDuplicates fetches all data with descriptorAttribute attribute's values of data to be filtered.
 	Datums in the fetched data are removed from data to be filtered.
 
