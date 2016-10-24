@@ -10,7 +10,7 @@ namespace Integro
 
 	template <
 		typename T>
-	class SynchronizedBuffer
+		class SynchronizedBuffer
 	{
 		vector<T> items;
 		atomic_flag lock;
@@ -25,7 +25,7 @@ namespace Integro
 			IsEmpty()
 		{
 			while (lock.test_and_set());
-				bool result = items.empty();
+			bool result = items.empty();
 			lock.clear();
 
 			return result;
@@ -35,7 +35,7 @@ namespace Integro
 			Size()
 		{
 			while (lock.test_and_set());
-				auto result = items.size();
+			auto result = items.size();
 			lock.clear();
 
 			return result;
@@ -43,19 +43,19 @@ namespace Integro
 
 		void
 			AddOne(
-			const T &item)
+				const T &item)
 		{
 			while (lock.test_and_set());
-				items.push_back(item);
+			items.push_back(item);
 			lock.clear();
 		}
 
 		void
 			AddOne(
-			const T &&item)
+				const T &&item)
 		{
 			while (lock.test_and_set());
-				items.emplace_back(move(item));
+			items.emplace_back(move(item));
 			lock.clear();
 		}
 
@@ -63,8 +63,8 @@ namespace Integro
 			GetAll()
 		{
 			while (lock.test_and_set());
-				vector<T> result(move(items));
-				items = vector<T>();
+			vector<T> result(move(items));
+			items = vector<T>();
 			lock.clear();
 
 			return result;

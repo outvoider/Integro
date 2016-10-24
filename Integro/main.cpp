@@ -1,4 +1,9 @@
-#define STATIC_LIBMONGOCLIENT
+#define BSONCXX_STATIC
+#define MONGOCXX_STATIC
+
+#include <mongocxx/instance.hpp>
+#include <mongocxx/client.hpp>
+#include <mongocxx/options/create_collection.hpp>
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <winsock2.h>
@@ -8,15 +13,14 @@
 #include "Integro.hpp"
 #include "Debug.hpp"
 
-auto INTEGRO_VERSION = "2.3";
+auto INTEGRO_VERSION = "2.4";
 
 int
-	main(
+main(
 	int argc
 	, wchar_t* argv[])
 {
-	mongo::client::GlobalInstance mongoInstance;
-	mongoInstance.assertInitialized();
+	mongocxx::instance inst{};
 
 	//Integro::Debug().Run();
 	Integro::Integro(argc, argv).Run();

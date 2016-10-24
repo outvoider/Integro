@@ -2,13 +2,38 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClInclude Include="Debug.hpp" />
-    <ClInclude Include="Mave.hpp" />
     <ClInclude Include="Copy.hpp" />
     <ClInclude Include="Hash.hpp" />
     <ClInclude Include="Synchronized.hpp" />
     <ClInclude Include="Milliseconds.hpp" />
-    <ClInclude Include="Access.hpp" />
     <ClInclude Include="Integro.hpp" />
+    <ClInclude Include="Mave\Mave.hpp">
+      <Filter>Mave</Filter>
+    </ClInclude>
+    <ClInclude Include="Mave\Ldap.hpp">
+      <Filter>Mave</Filter>
+    </ClInclude>
+    <ClInclude Include="Mave\Json.hpp">
+      <Filter>Mave</Filter>
+    </ClInclude>
+    <ClInclude Include="Mave\Bson.hpp">
+      <Filter>Mave</Filter>
+    </ClInclude>
+    <ClInclude Include="Access\ElasticClient.hpp">
+      <Filter>Access</Filter>
+    </ClInclude>
+    <ClInclude Include="Access\LdapClient.hpp">
+      <Filter>Access</Filter>
+    </ClInclude>
+    <ClInclude Include="Access\LmdbClient.hpp">
+      <Filter>Access</Filter>
+    </ClInclude>
+    <ClInclude Include="Access\MongoClient.hpp">
+      <Filter>Access</Filter>
+    </ClInclude>
+    <ClInclude Include="Access\TdsClient.hpp">
+      <Filter>Access</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="configs\config.json" />
@@ -16,5 +41,13 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Mave">
+      <UniqueIdentifier>{31bc8c02-ce3d-461f-9ecd-76fed8946c32}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Access">
+      <UniqueIdentifier>{5f9deccb-97cf-49c3-9bf9-68b48ed75f72}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
 </Project>

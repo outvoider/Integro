@@ -26,7 +26,7 @@ namespace Integro
 		static
 			void
 			OnError(
-			const string &message)
+				const string &message)
 		{
 			while (lock.test_and_set());
 
@@ -48,7 +48,7 @@ namespace Integro
 		static
 			void
 			OnEvent(
-			const string &message)
+				const string &message)
 		{
 			while (lock.test_and_set());
 
@@ -74,8 +74,8 @@ namespace Integro
 
 		void
 			Proceed(
-			function<void()> action
-			, function<void(const string&)> OnError)
+				function<void()> action
+				, function<void(const string&)> OnError)
 		{
 			try
 			{
@@ -97,11 +97,11 @@ namespace Integro
 
 		void
 			Retry(
-			function<void()> action
-			, function<void(const string&)> OnError
-			, const int errorTolerance = 0
-			, const int attemptsCount = 10
-			, const milliseconds pauseBetweenAttempts = milliseconds(1000))
+				function<void()> action
+				, function<void(const string&)> OnError
+				, const int errorTolerance = 0
+				, const int attemptsCount = 10
+				, const milliseconds pauseBetweenAttempts = milliseconds(1000))
 		{
 			for (int attempt = 1;; ++attempt)
 			{
@@ -160,9 +160,9 @@ namespace Integro
 			}
 		}
 
-		string
+		auto
 			Concatenate(
-			const Json &stringArray)
+				const Json &stringArray)
 		{
 			stringstream s;
 
@@ -174,9 +174,9 @@ namespace Integro
 			return s.str();
 		}
 
-		vector<string>
+		auto
 			ToStringVector(
-			const Json &stringArray)
+				const Json &stringArray)
 		{
 			vector<string> strings;
 
@@ -188,7 +188,7 @@ namespace Integro
 			return strings;
 		}
 
-		vector<pair<string, function<void()>>>
+		auto
 			CreateTdsActions()
 		{
 			vector<pair<string, function<void()>>> actions;
@@ -235,7 +235,7 @@ namespace Integro
 					auto RemoveDuplicates = Copy::RemoveDuplicates(descriptorAttribute, sourceAttribute, LoadDuplicateData);
 					auto SaveDataMongo = Copy::SaveDataMongo(mongoUrl, mongoDatabase, mongoCollection);
 					auto SaveDataElastic = Copy::SaveDataElastic(elasticUrl, elasticIndex, elasticType);
-					auto SaveData = [=](vector<Mave> &data) mutable
+					auto SaveData = [=](vector<Mave::Mave> &data) mutable
 					{
 						ProcessData(data);
 						RemoveDuplicates(data);
@@ -256,8 +256,8 @@ namespace Integro
 						// TEMPORARY SOLUTION NOTICE:
 						// Change to Copy::CopyDataInChunks when all tds queries provide sorted data
 
-						//Copy::CopyDataInChunks<Mave, milliseconds>(LoadData, SaveData, LoadStartTime, SaveStartTime, GetTime);
-						Copy::CopyDataInBulk<Mave, milliseconds>(LoadData, SaveData, LoadStartTime, SaveStartTime, GetTime);
+						//Copy::CopyDataInChunks<Mave::Mave, milliseconds>(LoadData, SaveData, LoadStartTime, SaveStartTime, GetTime);
+						Copy::CopyDataInBulk<Mave::Mave, milliseconds>(LoadData, SaveData, LoadStartTime, SaveStartTime, GetTime);
 					};
 
 					actions.push_back(make_pair(action, CopyData));
@@ -267,7 +267,7 @@ namespace Integro
 			return actions;
 		}
 
-		vector<pair<string, function<void()>>>
+		auto
 			CreateLdapActions()
 		{
 			vector<pair<string, function<void()>>> actions;
@@ -310,7 +310,7 @@ namespace Integro
 					auto SaveDataMongo = Copy::SaveDataMongo(mongoUrl, mongoDatabase, mongoCollection);
 					auto ProcessDataElastic = Copy::ProcessDataLdapElastic();
 					auto SaveDataElastic = Copy::SaveDataElastic(elasticUrl, elasticIndex, elasticType);
-					auto SaveData = [=](vector<Mave> &data) mutable
+					auto SaveData = [=](vector<Mave::Mave> &data) mutable
 					{
 						ProcessDataMongo(data);
 						SaveDataMongo(data);
@@ -328,7 +328,7 @@ namespace Integro
 					auto GetTime = Copy::GetTimeLdap(timeAttribute);
 					auto CopyData = [=]() mutable
 					{
-						Copy::CopyDataInChunks<Mave, milliseconds>(LoadData, SaveData, LoadStartTime, SaveStartTime, GetTime);
+						Copy::CopyDataInChunks<Mave::Mave, milliseconds>(LoadData, SaveData, LoadStartTime, SaveStartTime, GetTime);
 					};
 
 					actions.push_back(make_pair(action, CopyData));
@@ -365,8 +365,8 @@ namespace Integro
 			if (argc != 3
 				|| string((char*)argv[1]) != "--env"
 				|| (string((char*)argv[2]) != "dev"
-				&& string((char*)argv[2]) != "staging"
-				&& string((char*)argv[2]) != "prod"))
+					&& string((char*)argv[2]) != "staging"
+					&& string((char*)argv[2]) != "prod"))
 			{
 				OnError("[--env {dev, staging, prod}]");
 				return;
@@ -375,7 +375,7 @@ namespace Integro
 			environment = (char*)argv[2];
 
 			stringstream configBuffer;
-			ifstream configInput("configs\\config.json");
+			std::ifstream configInput("configs\\config.json");
 			configBuffer << configInput.rdbuf();
 			string configError;
 			config = Json::parse(configBuffer.str(), configError);
@@ -439,5 +439,5 @@ namespace Integro
 	string configPath = "configs/client.conf";
 	//string configPath = "configs/direct_client.conf";
 	string applicationName = "Integro";
-	ClientTds::Infin ClientTds::infin(configPath, applicationName, Integro::OnError, Integro::OnEvent);
+	Access::TdsClient::Infin Access::TdsClient::infin(configPath, applicationName, Integro::OnError, Integro::OnEvent);
 }

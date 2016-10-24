@@ -147,7 +147,7 @@ namespace Integro
 
 		void TdsQuery()
 		{
-			ClientTds::ExecuteQuery(tdsHost, tdsUser, tdsPassword, tdsDatabase, tdsQuery, [&](const Mave &datum)
+			Access::TdsClient::ExecuteQuery(tdsHost, tdsUser, tdsPassword, tdsDatabase, tdsQuery, [&](const Mave::Mave &datum)
 			{
 				cout << Escape(ToString(datum)) << endl;
 			});
@@ -155,7 +155,7 @@ namespace Integro
 
 		void LdapQuery()
 		{
-			auto OnData = [&](const Mave &datum)
+			auto OnData = [&](const Mave::Mave &datum)
 			{
 				cout << Escape(ToString(datum)) << endl;
 			};
@@ -165,36 +165,36 @@ namespace Integro
 				cerr << message << endl;
 			};
 
-			ClientLdap::Search(ldapHost, ldapPort, ldapUser, ldapPassword, ldapNode, ldapFilter, ldapIdAttribute, ldapTimeAttribute, milliseconds::zero(), milliseconds::zero(), OnData, OnMessage, OnMessage);
+			Access::LdapClient::Search(ldapHost, ldapPort, ldapUser, ldapPassword, ldapNode, ldapFilter, ldapIdAttribute, ldapTimeAttribute, milliseconds::zero(), milliseconds::zero(), OnData, OnMessage, OnMessage);
 		}
 
 		void MongoCreateCapped()
 		{
-			ClientMongo::CreateCollection(mongoUrl, mongoDatabase, mongoCapped, true, 1000);
+			Access::MongoClient::CreateCappedCollection(mongoUrl, mongoDatabase, mongoCapped, 1000);
 		}
 
 		void MongoDropDatabase()
 		{
-			ClientMongo::DropDatabase(mongoUrl, mongoDatabase);
+			Access::MongoClient::DropDatabase(mongoUrl, mongoDatabase);
 		}
 
 		void MongoDropCollection()
 		{
-			ClientMongo::DropCollection(mongoUrl, mongoDatabase, mongoCollection);
+			Access::MongoClient::DropCollection(mongoUrl, mongoDatabase, mongoCollection);
 		}
 
 		void MongoCount()
 		{
-			auto n = ClientMongo::Count(mongoUrl, mongoDatabase, mongoCollection);
+			auto n = Access::MongoClient::Count(mongoUrl, mongoDatabase, mongoCollection);
 			cout << n << endl;
 		}
 
 		void MongoQuery()
 		{
-			ClientMongo::Query(mongoUrl, mongoDatabase, mongoCollection, mongo::Query(), [&](const Mave &mave)
+			Access::MongoClient::Query([&](const Mave::Mave &mave)
 			{
 				cout << Escape(ToString(mave)) << endl;
-			});
+			}, mongoUrl, mongoDatabase, mongoCollection);
 		}
 
 		void MongoProduce()
@@ -214,10 +214,16 @@ namespace Integro
 
 				while (--i >= 0)
 				{
-					auto time = mongo::Date_t(duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count());
-					auto object = ToMave(BSON(mongo::GENOID << "#" << ++n << "start_time" << time));
-					ClientMongo::Insert(mongoUrl, mongoDatabase, mongoCollection, object);
-					ClientMongo::Insert(mongoUrl, mongoDatabase, mongoCapped, object);
+					auto object = Mave::FromBson(bsoncxx::builder::stream::document{}
+						<< "_id"
+						<< bsoncxx::oid()	// may not work: always generates the same id
+						<< "#"
+						<< ++n
+						<< "start_time"
+						<< bsoncxx::types::b_date(system_clock::now())
+						<< bsoncxx::builder::stream::finalize);
+					Access::MongoClient::Insert(object, mongoUrl, mongoDatabase, mongoCollection);
+					Access::MongoClient::Insert(object, mongoUrl, mongoDatabase, mongoCapped);
 					this_thread::sleep_for(chrono::microseconds(1));
 				}
 
@@ -239,17 +245,23 @@ namespace Integro
 				}
 
 				int i = atoi(s.c_str());
-				vector<Mave> objects;
+				vector<Mave::Mave> objects;
 
 				while (--i >= 0)
 				{
-					auto time = mongo::Date_t(duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count());
-					auto object = ToMave(BSON(mongo::GENOID << "#" << ++n << "start_time" << time));
+					auto object = Mave::FromBson(bsoncxx::builder::stream::document{}
+						<< "_id"
+						<< bsoncxx::oid()	// may not work: always generates the same id
+						<< "#"
+						<< ++n
+						<< "start_time"
+						<< bsoncxx::types::b_date(system_clock::now())
+						<< bsoncxx::builder::stream::finalize);
 					objects.push_back(object);
 				}
 
-				ClientMongo::Upsert(mongoUrl, mongoDatabase, mongoCollection, objects);
-				ClientMongo::Upsert(mongoUrl, mongoDatabase, mongoCapped, objects);
+				Access::MongoClient::Upsert(objects, mongoUrl, mongoDatabase, mongoCollection);
+				Access::MongoClient::Upsert(objects, mongoUrl, mongoDatabase, mongoCapped);
 
 				cout << "Done." << endl << endl;
 			}
@@ -257,29 +269,29 @@ namespace Integro
 
 		void ElasticCreateIndex()
 		{
-			ClientElastic::CreateIndex(elasticUrl, elasticIndex);
+			Access::ElasticClient::CreateIndex(elasticUrl, elasticIndex);
 		}
 
 		void ElasticDeleteIndex()
 		{
-			ClientElastic::DeleteIndex(elasticUrl, elasticIndex);
+			Access::ElasticClient::DeleteIndex(elasticUrl, elasticIndex);
 		}
 
 		void ElasticDeleteType()
 		{
-			ClientElastic::DeleteType(elasticUrl, elasticIndex, elasticType);
+			Access::ElasticClient::DeleteType(elasticUrl, elasticIndex, elasticType);
 		}
 
 		void ElasticCount()
 		{
 
-			auto n = ClientElastic::Count(elasticUrl, elasticIndex, elasticType);
+			auto n = Access::ElasticClient::Count(elasticUrl, elasticIndex, elasticType);
 			cout << n << endl;
 		}
 
 		void ElasticQuery()
 		{
-			ClientElastic::Search([&](const Mave &object)
+			Access::ElasticClient::Search([&](const Mave::Mave &object)
 			{
 				cout << Escape(ToString(object)) << endl;
 			}, elasticUrl, elasticIndex, elasticType);
@@ -293,7 +305,7 @@ namespace Integro
 			auto RemoveDuplicates = Copy::RemoveDuplicates(descriptorAttribute, sourceAttribute, LoadDuplicateData);
 			auto SaveDataMongo = Copy::SaveDataMongo(mongoUrl, mongoDatabase, mongoCollection);
 			auto SaveDataElastic = Copy::SaveDataElastic(elasticUrl, elasticIndex, elasticType);
-			auto SaveData = [=](vector<Mave> &data) mutable
+			auto SaveData = [=](vector<Mave::Mave> &data) mutable
 			{
 				ProcessData(data);
 				RemoveDuplicates(data);
@@ -305,7 +317,7 @@ namespace Integro
 			auto GetTime = Copy::GetTimeTds(timeAttribute);
 			auto CopyData = [=]() mutable
 			{
-				Copy::CopyDataInBulk<Mave, milliseconds>(LoadData, SaveData, LoadStartTime, SaveStartTime, GetTime);
+				Copy::CopyDataInBulk<Mave::Mave, milliseconds>(LoadData, SaveData, LoadStartTime, SaveStartTime, GetTime);
 			};
 
 			Retry(CopyData);
@@ -317,18 +329,18 @@ namespace Integro
 			bool hasMoreData = true;
 			int idCount = 0;
 			int startTime = 0;
-			vector<Mave> source;
-			map<int, Mave> dest;
-			multimap<int, Mave> index;
+			vector<Mave::Mave> source;
+			map<int, Mave::Mave> dest;
+			multimap<int, Mave::Mave> index;
 
 			for (int i = 0, t = 0; i < 100000; ++i)
 			{
-				source.push_back(Mave(map<string, Mave>({ { sourceAttribute, map<string, Mave>({ { dataAttribute, i } }) }, { timeAttribute, (Rand() % 10 != 0) ? t : t++ } })));
+				source.push_back(Mave::Mave(map<string, Mave::Mave>({ { sourceAttribute, map<string, Mave::Mave>({ { dataAttribute, i } }) }, { timeAttribute, (Rand() % 10 != 0) ? t : t++ } })));
 			}
 
-			auto LoadData = [&](int startTime, function<void(Mave&)> OnDatum)
+			auto LoadData = [&](int startTime, function<void(Mave::Mave&)> OnDatum)
 			{
-				auto i = lower_bound(source.begin(), source.end(), Mave(map<string, Mave>({ { timeAttribute, startTime } })), [&](const Mave &a, const Mave &b)
+				auto i = lower_bound(source.begin(), source.end(), Mave::Mave(map<string, Mave::Mave>({ { timeAttribute, startTime } })), [&](const Mave::Mave &a, const Mave::Mave &b)
 				{
 					return a[timeAttribute].AsInt() < b[timeAttribute].AsInt();
 				});
@@ -349,7 +361,7 @@ namespace Integro
 			};
 
 			auto RemoveDuplicates = Copy::RemoveDuplicates(descriptorAttribute, sourceAttribute
-				, [&](const string &attribute, vector<int> &values, function<void(Mave&)> OnDatum)
+				, [&](const string &attribute, vector<int> &values, function<void(Mave::Mave&)> OnDatum)
 			{
 				TryThrow(1, "failed to remove duplicates");
 
@@ -364,7 +376,7 @@ namespace Integro
 				}
 			});
 
-			auto SaveData = [&](vector<Mave> &data)
+			auto SaveData = [&](vector<Mave::Mave> &data)
 			{
 				for (auto &datum : data)
 				{
@@ -398,7 +410,7 @@ namespace Integro
 				//Print("saved start time: ", startTime);
 			};
 
-			auto GetTime = [&](Mave &datum)
+			auto GetTime = [&](Mave::Mave &datum)
 			{
 				TryThrow(100, "failed to get time");
 				//Print("got time: ", datum[timeAttribute].AsInt());
@@ -407,7 +419,7 @@ namespace Integro
 
 			auto CopyData = [&]()
 			{
-				Copy::CopyDataInChunks<Mave, int>(LoadData, SaveData, LoadStartTime, SaveStartTime, GetTime);
+				Copy::CopyDataInChunks<Mave::Mave, int>(LoadData, SaveData, LoadStartTime, SaveStartTime, GetTime);
 			};
 
 			while (hasMoreData)
@@ -418,8 +430,8 @@ namespace Integro
 			cout << "--------------------------------" << endl;
 
 			auto result = source.size() == dest.size();
-			map<int, Mave> sourceData;
-			map<int, Mave> destData;
+			map<int, Mave::Mave> sourceData;
+			map<int, Mave::Mave> destData;
 
 			for (auto d : source)
 			{
@@ -473,7 +485,7 @@ namespace Integro
 		{
 			string countAttribute = "count";
 			bool hasMoreData = true;
-			vector<Mave> source;
+			vector<Mave::Mave> source;
 
 			{
 				auto time = milliseconds::zero();
@@ -491,10 +503,10 @@ namespace Integro
 
 				for (int i = 0; i < 10000; ++i)
 				{
-					map<string, Mave> m;
+					map<string, Mave::Mave> m;
 					m[countAttribute] = i;
-					m[timeAttribute] = MillisecondsToUtc(time, true);
-					auto &s = (m[sourceAttribute] = map<string, Mave>()).AsMap();
+					m[timeAttribute] = Milliseconds::ToUtc(time, true);
+					auto &s = (m[sourceAttribute] = map<string, Mave::Mave>()).AsMap();
 
 					for (int i = 0; i < text.size(); ++i)
 					{
@@ -506,13 +518,13 @@ namespace Integro
 				}
 			}
 
-			auto LoadData = [&](milliseconds startTime, function<void(Mave&)> OnDatum)
+			auto LoadData = [&](milliseconds startTime, function<void(Mave::Mave&)> OnDatum)
 			{
-				auto i = lower_bound(source.begin(), source.end(), Mave(startTime), [&](const Mave &a, const Mave &b)
+				auto i = lower_bound(source.begin(), source.end(), Mave::Mave(startTime), [&](const Mave::Mave &a, const Mave::Mave &b)
 				{
 					return a.IsMilliseconds()
-						? a.AsMilliseconds() < UtcToMilliseconds(b[timeAttribute].AsString())
-						: UtcToMilliseconds(a[timeAttribute].AsString()) < b.AsMilliseconds();
+						? a.AsMilliseconds() < Milliseconds::FromUtc(b[timeAttribute].AsString())
+						: Milliseconds::FromUtc(a[timeAttribute].AsString()) < b.AsMilliseconds();
 				});
 
 				if (i == source.end())
@@ -523,7 +535,7 @@ namespace Integro
 				for (; i != source.end(); ++i)
 				{
 					TryThrow(50, "failed to load data");
-					OnDatum(Copy(*i));
+					OnDatum(Mave::Copy(*i));
 				}
 
 				hasMoreData = false;
@@ -534,7 +546,7 @@ namespace Integro
 			auto RemoveDuplicates = Copy::RemoveDuplicates(descriptorAttribute, sourceAttribute, LoadDuplicateData);
 			auto SaveDataMongo = Copy::SaveDataMongo(mongoUrl, mongoDatabase, mongoCollection);
 			auto SaveDataElastic = Copy::SaveDataElastic(elasticUrl, elasticIndex, elasticType);
-			auto SaveData = [=](vector<Mave> &data) mutable
+			auto SaveData = [=](vector<Mave::Mave> &data) mutable
 			{
 				TryThrow(1, "failed to save data");
 				ProcessData(data);
@@ -555,14 +567,14 @@ namespace Integro
 				SaveStartTimeA(time);
 			};
 			auto GetTimeA = Copy::GetTimeTds(timeAttribute);
-			auto GetTime = [=](Mave &datum) mutable
+			auto GetTime = [=](Mave::Mave &datum) mutable
 			{
 				TryThrow(10, "failed to get time");
 				return GetTimeA(datum);
 			};
 			auto CopyData = [=]() mutable
 			{
-				Copy::CopyDataInChunks<Mave, milliseconds>(LoadData, SaveData, LoadStartTime, SaveStartTime, GetTime);
+				Copy::CopyDataInChunks<Mave::Mave, milliseconds>(LoadData, SaveData, LoadStartTime, SaveStartTime, GetTime);
 			};
 
 			while (hasMoreData)
@@ -578,7 +590,7 @@ namespace Integro
 			int number = 0;
 			int count = 0;
 			vector<string> sv;
-			vector<Mave> maves;
+			vector<Mave::Mave> maves;
 			milliseconds start;
 
 			{
@@ -595,13 +607,13 @@ namespace Integro
 				start = duration_cast<milliseconds>(chrono::system_clock::now().time_since_epoch());
 			}
 
-			auto LoadData = [&](milliseconds startTime, function<void(Mave&)> OnDatum)
+			auto LoadData = [&](milliseconds startTime, function<void(Mave::Mave&)> OnDatum)
 			{
 				auto time = startTime;
 
 				for (auto &m : maves)
 				{
-					OnDatum(Copy(m));
+					OnDatum(Mave::Copy(m));
 				}
 
 				while (true)
@@ -625,10 +637,10 @@ namespace Integro
 						maves.clear();
 					}
 
-					map<string, Mave> m;
-					m[timeAttribute] = MillisecondsToUtc(time, true);
+					map<string, Mave::Mave> m;
+					m[timeAttribute] = Milliseconds::ToUtc(time, true);
 					m[countAttribute] = ++count;
-					auto &s = (m[sourceAttribute] = map<string, Mave>()).AsMap();
+					auto &s = (m[sourceAttribute] = map<string, Mave::Mave>()).AsMap();
 
 					for (int i = 0; i < sv.size(); ++i)
 					{
@@ -636,7 +648,7 @@ namespace Integro
 					}
 
 					maves.push_back(m);
-					OnDatum(Copy(m));
+					OnDatum(Mave::Copy(m));
 
 					if (Rand() % 1000 == 0)
 					{
@@ -647,7 +659,7 @@ namespace Integro
 
 				hasMoreData = false;
 				cout << "loaded records count: " << count << endl;
-				cout << "finished loading data, current time: " << MillisecondsToUtc(duration_cast<milliseconds>(chrono::system_clock::now().time_since_epoch())) << endl;
+				cout << "finished loading data, current time: " << Milliseconds::ToUtc(duration_cast<milliseconds>(chrono::system_clock::now().time_since_epoch())) << endl;
 			};
 
 			auto ProcessData = Copy::ProcessDataTds(channelName, modelName, model, topicName, targetStores);
@@ -655,7 +667,7 @@ namespace Integro
 			auto RemoveDuplicates = Copy::RemoveDuplicates(descriptorAttribute, sourceAttribute, LoadDuplicateData);
 			auto SaveDataMongo = Copy::SaveDataMongo(mongoUrl, mongoDatabase, mongoCollection);
 			auto SaveDataElastic = Copy::SaveDataElastic(elasticUrl, elasticIndex, elasticType);
-			auto SaveData = [=](vector<Mave> &data) mutable
+			auto SaveData = [=](vector<Mave::Mave> &data) mutable
 			{
 				ProcessData(data);
 				RemoveDuplicates(data);
@@ -667,17 +679,17 @@ namespace Integro
 			auto GetTime = Copy::GetTimeTds(timeAttribute);
 			auto CopyData = [=]() mutable
 			{
-				Copy::CopyDataInChunks<Mave, milliseconds>(LoadData, SaveData, LoadStartTime, SaveStartTime, GetTime);
+				Copy::CopyDataInChunks<Mave::Mave, milliseconds>(LoadData, SaveData, LoadStartTime, SaveStartTime, GetTime);
 			};
 
-			cout << "started processing data, current time: " << MillisecondsToUtc(duration_cast<milliseconds>(chrono::system_clock::now().time_since_epoch())) << endl;
+			cout << "started processing data, current time: " << Milliseconds::ToUtc(duration_cast<milliseconds>(chrono::system_clock::now().time_since_epoch())) << endl;
 
 			while (hasMoreData)
 			{
 				Retry(CopyData);
 			}
 
-			cout << "finished saving data, current time: " << MillisecondsToUtc(duration_cast<milliseconds>(chrono::system_clock::now().time_since_epoch())) << endl;
+			cout << "finished saving data, current time: " << Milliseconds::ToUtc(duration_cast<milliseconds>(chrono::system_clock::now().time_since_epoch())) << endl;
 		}
 
 		void CopyCappedCorrectnessTest()
@@ -867,47 +879,84 @@ namespace Integro
 			}
 		}
 
-		void JsonBson()
+		void JsonBsonTest()
 		{
-			map<string, Mave> o1 = { { "#", 1 }, { "d", vector<Mave>({ "Monday", "Tuesday" }) } };
-			Mave m1 = o1;
-			auto b1 = ToBson(m1);
-
-			mongo::BSONObjBuilder bo;
-			mongo::BSONArrayBuilder ba;
-			ba.append("Monday");
-			ba.append("Tuesday");
-			bo.append("#", 1);
-			bo.append("d", (mongo::BSONArray)((mongo::BSONObj)ba.arr()));
-			auto b2 = bo.obj();
+			Mave::Mave m1 = map<string, Mave::Mave>(
+			{
+				{ "#", 1 }
+				, { "L", 1LL }
+				, { "D", .1 }
+				, { "B", true }
+				, { "N", nullptr }
+				, { "T", milliseconds(1) }
+				, { "O", make_pair(Mave::BSON_OID, bsoncxx::types::b_oid().value.to_string()) }
+				, { "S", "abc" }
+				, { "V", vector<Mave::Mave>({ "Monday", "Tuesday" }) }
+				, { "M", map<string, Mave::Mave>({ { "S", "Wednesday" } }) }
+			});
+			auto b1 = ToBsonDocument(m1);
+			auto j1 = ToJson(m1);
+			auto mj1 = Mave::FromJson(j1);
+			auto mb1 = Mave::FromBson(b1);
 
 			cout << ToString(m1) << endl;
 			cout << "-----------------------------------" << endl;
-			cout << b1.jsonString() << endl;
+			cout << bsoncxx::to_json(b1.view()) << endl;
 			cout << "-----------------------------------" << endl;
-			cout << b2.jsonString() << endl;
+			cout << j1.dump() << endl;
+			cout << "-----------------------------------" << endl;
+			cout << ToString(mj1) << endl;
+			cout << "-----------------------------------" << endl;
+			cout << ToString(mb1) << endl;
 
-			//Mave l("aaa");
-			//vector<Mave> a1 = { nullptr, true, l, "bbb" };
-			//map<string, Mave> o1 = { { "#", 1 }, { "complex", false } };
-			//vector<Mave> a2 = { 3, milliseconds(1), "ccc", a1, o1 };
-			//map<string, Mave> o2 = { { "l", 2 }, { "complex", true }, { "object", o1 }, { "array", a1 }, { "array2", a2 } };
 
-			//auto bo = ToBson(o2);
-			//auto mo1 = ToMave(bo);
-			//auto jo = ToJson(mo1);
-			//auto mo2 = ToMave(jo);
+			//Mave::Mave m2 = vector<Mave::Mave>({ 1, "a" });
+			//auto a1 = ToBsonArray(m2);
+			//cout << "-----------------------------------" << endl;
+			//cout << bsoncxx::to_json(a1.view()) << endl;
 
-			//cout << ToString(o2) << endl;
+
+			//bsoncxx::builder::stream::document b3;
+			//b3 << "2" << 2;
+			//bsoncxx::builder::stream::document b4;
+			//b4 << "3" << bsoncxx::types::b_document{ b3 };
 			//cout << "-----------------------------------" << endl;
-			//cout << bo.jsonString() << endl;
+			//cout << bsoncxx::to_json(b3.view()) << endl;
 			//cout << "-----------------------------------" << endl;
-			//cout << ToString(mo1) << endl;
+			//cout << bsoncxx::to_json(b4.view()) << endl;
+			//b3 << "4" << 4;
 			//cout << "-----------------------------------" << endl;
-			//cout << jo.dump() << endl;
+			//cout << bsoncxx::to_json(b3.view()) << endl;
 			//cout << "-----------------------------------" << endl;
-			//cout << ToString(mo2) << endl;
-			//cout << "-----------------------------------" << endl;
+			//cout << bsoncxx::to_json(b4.view()) << endl;
+		}
+
+		void MaveTest()
+		{
+			Mave::Mave m1 = map<string, Mave::Mave>(
+			{
+				{ "#", 1 }
+				,{ "L", 1LL }
+				,{ "D", .1 }
+				,{ "B", true }
+				,{ "N", nullptr }
+				,{ "T", milliseconds(1) }
+				,{ "O", make_pair(Mave::BSON_OID, bsoncxx::types::b_oid().value.to_string()) }
+				,{ "S", "abc" }
+				,{ "V", vector<Mave::Mave>({ "Monday", "Tuesday" }) }
+				,{ "M", map<string, Mave::Mave>({ { "S", "Wednesday" } }) }
+				,{ "V1", vector<Mave::Mave>() }
+				,{ "M1", map<string, Mave::Mave>() }
+			});
+			auto m2 = Mave::Copy(m1);
+
+			m1.AsMap()["A"] = "addon1";
+			m1["V"].AsVector().push_back("addon2");
+			m1["M"].AsMap()["A"] = "addon3";
+
+			cout << ToString(m1) << endl;
+			cout << "-----------------------------------" << endl;
+			cout << ToString(m2) << endl;
 		}
 
 		void PrintCopyCounts()
@@ -915,15 +964,15 @@ namespace Integro
 			for (auto &collection : tdsCollections)
 			{
 				cout << "collection name: '" << collection << "'" << endl;
-				cout << "mongo count: " << ClientMongo::Count(mongoUrl, mongoDatabase, collection) << endl;
-				cout << "elastic count: " << ClientElastic::Count(elasticUrl, elasticIndex, collection) << endl;
+				cout << "mongo count: " << Access::MongoClient::Count(mongoUrl, mongoDatabase, collection) << endl;
+				cout << "elastic count: " << Access::ElasticClient::Count(elasticUrl, elasticIndex, collection) << endl;
 			}
 
 			for (auto &collection : ldapCollections)
 			{
 				cout << "collection name: '" << collection << "'" << endl;
-				cout << "mongo count: " << ClientMongo::Count(mongoUrl, mongoDatabase, collection) << endl;
-				cout << "elastic count: " << ClientElastic::Count(elasticUrl, elasticIndex, collection) << endl;
+				cout << "mongo count: " << Access::MongoClient::Count(mongoUrl, mongoDatabase, collection) << endl;
+				cout << "elastic count: " << Access::ElasticClient::Count(elasticUrl, elasticIndex, collection) << endl;
 			}
 		}
 
@@ -940,7 +989,7 @@ namespace Integro
 				{
 					try
 					{
-						string value = ClientLmdb::GetOrDefault(path, key);
+						string value = Access::LmdbClient::GetOrDefault(path, key);
 						//cout << "g" << i << ": [" << key << "] = " << value << endl;
 					}
 					catch (const exception &ex)
@@ -957,7 +1006,7 @@ namespace Integro
 				{
 					try
 					{
-						ClientLmdb::Set(path, key, data);
+						Access::LmdbClient::Set(path, key, data);
 						//cout << "s" << i << ": [" << key << "] = " << data << endl;
 					}
 					catch (const exception &ex)
@@ -1073,7 +1122,8 @@ namespace Integro
 		void Run()
 		{
 			//LmdbTest();
-			//JsonBson();
+			//JsonBsonTest();
+			//MaveTest();
 			//PrintCopyCounts();
 
 			//CopyTds();

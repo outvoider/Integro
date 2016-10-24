@@ -13,7 +13,8 @@
 #include "LDAPSearchResult.h"
 #include "LDAPResult.h"
 
-#include "mongo/client/dbclient.h"
+#include <mongocxx/client.hpp>
+#include <mongocxx/options/create_collection.hpp>
 
 #include "client_http.hpp"
 
@@ -21,7 +22,10 @@
 #include "lmdb.h"
 
 #include "Milliseconds.hpp"
-#include "Mave.hpp"
+#include "Mave/Mave.hpp"
+#include "Mave/Ldap.hpp"
+#include "Mave/Json.hpp"
+#include "Mave/Bson.hpp"
 
 namespace Integro
 {
@@ -81,12 +85,12 @@ namespace Integro
 		static
 			int
 			HandleError(
-			DBPROCESS* dbproc
-			, int severity
-			, int dberr
-			, int oserr
-			, char* dberrstr
-			, char* oserrstr)
+				DBPROCESS* dbproc
+				, int severity
+				, int dberr
+				, int oserr
+				, char* dberrstr
+				, char* oserrstr)
 		{
 			stringstream s;
 
@@ -120,14 +124,14 @@ namespace Integro
 		static
 			int
 			HandleMessage(
-			DBPROCESS* dbproc
-			, DBINT msgno
-			, int msgstate
-			, int severity
-			, char* msgtext
-			, char* srvname
-			, char* procname
-			, int line)
+				DBPROCESS* dbproc
+				, DBINT msgno
+				, int msgstate
+				, int severity
+				, char* msgtext
+				, char* srvname
+				, char* procname
+				, int line)
 		{
 			enum { changed_database = 5701, changed_language = 5703 };
 
@@ -167,8 +171,8 @@ namespace Integro
 		static
 			string
 			ToTrimmedString(
-			char *begin
-			, char *end)
+				char *begin
+				, char *end)
 		{
 			for (; begin < end && *begin == ' '; ++begin);
 			for (; begin < end && *(end - 1) == ' '; --end);
@@ -181,11 +185,11 @@ namespace Integro
 		static
 			void
 			ExecuteCommand(
-			const string &host
-			, const string &user
-			, const string &password
-			, const string &database
-			, const string &sql)
+				const string &host
+				, const string &user
+				, const string &password
+				, const string &database
+				, const string &sql)
 		{
 			ClientTds client(host, user, password);
 			client.ExecuteCommand(database, sql);
@@ -194,12 +198,12 @@ namespace Integro
 		static
 			void
 			ExecuteQuery(
-			const string &host
-			, const string &user
-			, const string &password
-			, const string &database
-			, const string &sql
-			, function<void(Mave&)> OnRow)
+				const string &host
+				, const string &user
+				, const string &password
+				, const string &database
+				, const string &sql
+				, function<void(Mave::Mave&)> OnRow)
 		{
 			ClientTds client(host, user, password);
 			client.ExecuteCommand(database, sql);
@@ -246,7 +250,7 @@ namespace Integro
 
 		void
 			FetchResults(
-			function<void(Mave&)> OnRow)
+				function<void(Mave::Mave&)> OnRow)
 		{
 			vector<string> columns;
 
@@ -286,7 +290,7 @@ namespace Integro
 						break;
 					}
 
-					map<string, Mave> row;
+					map<string, Mave::Mave> row;
 
 					switch (rowCode)
 					{
@@ -314,16 +318,12 @@ namespace Integro
 									row.insert({ columns[i], ToTrimmedString((char*)&buffer[0], (char*)&buffer[count]) });
 								}
 							}
-
-							OnRow(Mave(row));
+							OnRow(Mave::Mave(row));
 							break;
-
 						case BUF_FULL:
 							throw exception("ClientTds::FetchResults(): failed to fetch a row, the buffer is full");
-
 						case FAIL:
 							throw exception("ClientTds::FetchResults(): failed to fetch a row");
-
 						default:
 							// ingnore a computeid row
 							break;
@@ -334,8 +334,8 @@ namespace Integro
 
 		void
 			ExecuteCommand(
-			const string &database
-			, const string &sql)
+				const string &database
+				, const string &sql)
 		{
 			dbfreebuf(dbproc);
 
@@ -375,13 +375,13 @@ namespace Integro
 		static
 			int
 			SearchSome(
-			const string &host
-			, const int port
-			, const string &user
-			, const string &password
-			, const string &node
-			, const string &filter
-			, function<void(Mave&)> OnEntry)
+				const string &host
+				, const int port
+				, const string &user
+				, const string &password
+				, const string &node
+				, const string &filter
+				, function<void(Mave::Mave&)> OnEntry)
 		{
 			auto result = LDAPResult::SUCCESS;
 			LDAPAsynConnection connection(host, port);
@@ -427,13 +427,11 @@ namespace Integro
 				{
 					case LDAPMsg::SEARCH_ENTRY:
 						entry = ((LDAPSearchResult*)message.get())->getEntry();
-
 						if (entry == nullptr)
 						{
 							throw exception("ClientLdap::SearchSome(): search has failed");
 						}
-
-						OnEntry(ToMave(*entry));
+						OnEntry(Mave::FromLdap(*entry));
 						break;
 					case LDAPMsg::SEARCH_REFERENCE:
 						break;
@@ -451,21 +449,21 @@ namespace Integro
 		static
 			void
 			Search(
-			const string &host
-			, const int port
-			, const string &user
-			, const string &password
-			, const string &node
-			, const string &filter
-			, const string &idAttribute
-			, const string &timeAttribute
-			, const milliseconds lowerBound
-			, const milliseconds upperBound
-			, function<void(Mave&)> OnEntry
-			, function<void(const string&)> OnError
-			, function<void(const string&)> OnEvent)
+				const string &host
+				, const int port
+				, const string &user
+				, const string &password
+				, const string &node
+				, const string &filter
+				, const string &idAttribute
+				, const string &timeAttribute
+				, const milliseconds lowerBound
+				, const milliseconds upperBound
+				, function<void(Mave::Mave&)> OnEntry
+				, function<void(const string&)> OnError
+				, function<void(const string&)> OnEvent)
 		{
-			vector<Mave> entries;
+			vector<Mave::Mave> entries;
 			stack<pair<milliseconds, milliseconds>> intervals; intervals.push({ lowerBound, upperBound });
 			stringstream s;
 
@@ -496,14 +494,14 @@ namespace Integro
 				OnEvent(s.str());
 
 				entries.clear();
-				auto result = SearchSome(host, port, user, password, node, newFilter, [&](Mave &entry)
+				auto result = SearchSome(host, port, user, password, node, newFilter, [&](Mave::Mave &entry)
 				{
 					entries.push_back(entry);
 					auto &value = entries.back()[timeAttribute];
 					value = LdapTimeToMilliseconds(value.AsString());
 				});
 
-				sort(entries.begin(), entries.end(), [&](Mave &left, Mave &right)
+				sort(entries.begin(), entries.end(), [&](Mave::Mave &left, Mave::Mave &right)
 				{
 					return left[timeAttribute].AsMilliseconds() < right[timeAttribute].AsMilliseconds();
 				});
@@ -518,7 +516,7 @@ namespace Integro
 				}
 				else if (entries.size() > 0
 					&& (result == LDAPResult::SIZE_LIMIT_EXCEEDED
-					|| result == LDAPResult::TIME_LIMIT_EXCEEDED))
+						|| result == LDAPResult::TIME_LIMIT_EXCEEDED))
 				{
 					auto lastTime = entries.back()[timeAttribute].AsMilliseconds();
 
@@ -550,244 +548,332 @@ namespace Integro
 
 	class ClientMongo
 	{
-		typedef mongo::DBClientBase DBClientBase;
-
-		static
-			DBClientBase*
-			Create(
-			const string &url)
-		{
-			string errmsg;
-			auto cs = mongo::ConnectionString::parse(url, errmsg);
-
-			if (!cs.isValid())
-			{
-				throw exception(errmsg.c_str());
-			}
-
-			auto *client = cs.connect(errmsg);
-
-			if (client == nullptr)
-			{
-				throw exception(errmsg.c_str());
-			}
-
-			return client;
-		}
-
 	public:
-		static
-			unsigned long long
-			Count(
-			const string &url
-			, const string &database
-			, const string &collection)
-		{
-			unique_ptr<DBClientBase> client(Create(url));
-			return client->count(database + "." + collection);
-		}
-
 		static
 			void
 			QueryCapped(
-			const string &url
-			, const string &database
-			, const string &collection
-			, const mongo::OID &lowerBound
-			, function<void(Mave&)> OnObject)
+				function<void(Mave::Mave&)> OnObject
+				, const string &url
+				, const string &database
+				, const string &collection
+				, const bsoncxx::oid &lowerBound)
 		{
-			unique_ptr<DBClientBase> client(Create(url));
-			auto query = MONGO_QUERY("_id" << mongo::GTE << lowerBound).sort("$natural");
-			auto cursor = client->query(database + "." + collection, query);
+			bsoncxx::builder::stream::document filter;
+			filter
+				<< "_id"
+				<< bsoncxx::builder::stream::open_document
+				<< "$gte"
+				<< lowerBound
+				<< bsoncxx::builder::stream::close_document;
 
-			if (!cursor.get())
+			mongocxx::options::find options;
+			options.sort(
+				bsoncxx::builder::stream::document{}
+				<< "$natural"
+				<< -1
+				<< bsoncxx::builder::stream::finalize);
+
+			mongocxx::client client{ mongocxx::uri{ url } };
+			auto cursor = client[database][collection].find(filter.view(), options);
+			vector<Mave::Mave> maves;
+			for (auto d : cursor)
 			{
-				throw exception("ClientMongo::QueryCapped(): failed to obtain a cursor");
+				maves.push_back(Mave::FromBson(d));
 			}
-
-			while (cursor->more())
+			for (auto i = maves.rbegin(); i != maves.rend(); ++i)
 			{
-				OnObject(ToMave(cursor->nextSafe()));
+				OnObject(*i);
 			}
 		}
 
 		static
 			void
 			Query(
-			const string &url
-			, const string &database
-			, const string &collection
-			, const string &timeAttribute
-			, const milliseconds lowerBound
-			, const milliseconds upperBound
-			, function<void(Mave&)> OnObject)
+				function<void(Mave::Mave&)> OnObject
+				, const string &url
+				, const string &database
+				, const string &collection
+				, const string &timeAttribute
+				, const milliseconds lowerBound
+				, const milliseconds upperBound)
 		{
 			if (timeAttribute == "")
 			{
 				throw exception("ClientMongo::Query(): time attribute must be provided");
 			}
-
 			if (upperBound > milliseconds::zero() && lowerBound > upperBound)
 			{
 				throw exception(("ClientMongo::Query(): bad interval ["
 					+ to_string(lowerBound.count()) + ", " + to_string(upperBound.count()) + "]").c_str());
 			}
 
-			mongo::BSONObjBuilder b;
-
+			bsoncxx::builder::stream::document filter;
 			if (lowerBound > milliseconds::zero())
 			{
-				b << timeAttribute << mongo::GTE << mongo::Date_t(lowerBound.count());
+				filter
+					<< timeAttribute
+					<< bsoncxx::builder::stream::open_document
+					<< "$gte"
+					<< bsoncxx::types::b_date(lowerBound.count())
+					<< bsoncxx::builder::stream::close_document;
 			}
-
 			if (upperBound > milliseconds::zero())
 			{
-				b << timeAttribute << mongo::LTE << mongo::Date_t(upperBound.count());
+				filter
+					<< timeAttribute
+					<< bsoncxx::builder::stream::open_document
+					<< "$lte"
+					<< bsoncxx::types::b_date(upperBound.count())
+					<< bsoncxx::builder::stream::close_document;
 			}
 
-			auto query = mongo::Query(b.obj()).sort(timeAttribute);
+			mongocxx::options::find options;
+			options.sort(
+				bsoncxx::builder::stream::document{}
+				<< timeAttribute
+				<< 1
+				<< bsoncxx::builder::stream::finalize);
 
-			Query(url, database, collection, query, OnObject);
+			mongocxx::client client{ mongocxx::uri{ url } };
+			auto cursor = client[database][collection].find(filter.extract(), options);
+			for (auto d : cursor)
+			{
+				OnObject(Mave::FromBson(d));
+			}
 		}
 
 		static
 			void
 			Query(
-			const string &url
-			, const string &database
-			, const string &collection
-			, mongo::Query &query
-			, function<void(Mave&)> OnObject)
+				function<void(Mave::Mave&)> OnObject
+				, const string &url
+				, const string &database
+				, const string &collection
+				, const string &attribute
+				, vector<int> &values)
 		{
-			unique_ptr<DBClientBase> client(Create(url));
-			auto cursor = client->query(database + "." + collection, query);
-
-			if (!cursor.get())
+			if (attribute == "")
 			{
-				throw exception("ClientMongo::Query(): failed to obtain a cursor");
+				throw exception("ClientMongo::Query(): attribute must be provided");
 			}
 
-			while (cursor->more())
+			bsoncxx::builder::stream::array filterIds;
+			for (auto v : values)
 			{
-				OnObject(ToMave(cursor->nextSafe()));
+				filterIds << v;
+			}
+
+			bsoncxx::builder::stream::document filter;
+			filter
+				<< attribute
+				<< bsoncxx::builder::stream::open_document
+				<< "$in"
+				<< bsoncxx::types::b_array{ filterIds.view() }
+			<< bsoncxx::builder::stream::close_document;
+
+			mongocxx::options::find options;
+			options.sort(
+				bsoncxx::builder::stream::document{}
+				<< attribute
+				<< 1
+				<< bsoncxx::builder::stream::finalize);
+
+			mongocxx::client client{ mongocxx::uri{ url } };
+			auto cursor = client[database][collection].find(filter.view(), options);
+			for (auto d : cursor)
+			{
+				OnObject(Mave::FromBson(d));
+			}
+		}
+
+		static
+			void
+			Query(
+				function<void(Mave::Mave&)> OnObject
+				, const string &url
+				, const string &database
+				, const string &collection)
+		{
+			mongocxx::client client{ mongocxx::uri{ url } };
+			auto cursor = client[database][collection].find({});
+			for (auto d : cursor)
+			{
+				OnObject(Mave::FromBson(d));
 			}
 		}
 
 		static
 			bool
 			Contains(
-			const string &url
-			, const string &database
-			, const string &collection
-			, const mongo::OID &id)
+				const bsoncxx::oid &id
+				, const string &url
+				, const string &database
+				, const string &collection)
 		{
-			unique_ptr<DBClientBase> client(Create(url));
-			auto query = MONGO_QUERY("_id" << id).sort("_id");
-			auto result = client->findOne(database + "." + collection, query);
-			return !result.isEmpty();
+			mongocxx::client client{ mongocxx::uri{ url } };
+			return 0 < client[database][collection].count(bsoncxx::builder::stream::document{} << "_id" << id << bsoncxx::builder::stream::finalize);
+		}
+
+		static
+			unsigned long long
+			Count(
+				const string &url
+				, const string &database
+				, const string &collection)
+		{
+			mongocxx::client client{ mongocxx::uri{ url } };
+			return client[database][collection].count(bsoncxx::document::view());
+		}
+
+		static
+			void
+			Delete(
+				const vector<Mave::Mave> &objects
+				, const string &url
+				, const string &database
+				, const string &collection)
+		{
+			if (!objects.empty())
+			{
+				bsoncxx::builder::stream::array filterIds;
+				if (objects[0]["_id"].AsCustom().first == Mave::BSON_OID)
+				{
+					for (auto &o : objects)
+					{
+						filterIds << bsoncxx::oid(o["_id"].AsCustom().second);
+					}
+				}
+				else
+				{
+					for (auto &o : objects)
+					{
+						filterIds << o["_id"].AsString();
+					}
+				}
+
+				bsoncxx::builder::stream::document filter;
+				filter
+					<< "_id"
+					<< bsoncxx::builder::stream::open_document
+					<< "$in"
+					<< bsoncxx::types::b_array{ filterIds.view() }
+				<< bsoncxx::builder::stream::close_document;
+
+				mongocxx::client client{ mongocxx::uri{ url } };
+				auto result = client[database][collection].delete_many(filter.view());
+			}
 		}
 
 		static
 			void
 			Insert(
-			const string &url
-			, const string &database
-			, const string &collection
-			, const Mave &object)
+				const Mave::Mave &object
+				, const string &url
+				, const string &database
+				, const string &collection)
 		{
-			unique_ptr<DBClientBase> client(Create(url));
-			client->insert(database + "." + collection, ToBson(object));
+			mongocxx::client client{ mongocxx::uri{ url } };
+			auto result = client[database][collection].insert_one(ToBsonDocument(object));
+		}
+
+		static
+			void
+			Insert(
+				const vector<Mave::Mave> &objects
+				, const string &url
+				, const string &database
+				, const string &collection)
+		{
+			if (!objects.empty())
+			{
+				vector<bsoncxx::document::value> documents;
+				for (auto &o : objects)
+				{
+					documents.push_back(ToBsonDocument(o));
+				}
+
+				mongocxx::client client{ mongocxx::uri{ url } };
+				auto result = client[database][collection].insert_many(documents);
+			}
 		}
 
 		static
 			void
 			Upsert(
-			const string &url
-			, const string &database
-			, const string &collection
-			, const vector<Mave> &objects)
+				const vector<Mave::Mave> &objects
+				, const string &url
+				, const string &database
+				, const string &collection)
 		{
 			if (!objects.empty())
 			{
-				unique_ptr<DBClientBase> client(Create(url));
-				auto builder = client->initializeUnorderedBulkOp(database + "." + collection);
-
-				for (auto &o : objects)
-				{
-					if (o["_id"].IsBsonOid())
-					{
-						auto value = o["_id"].AsBsonOid();
-						builder.find(BSON("_id" << value)).upsert().replaceOne(ToBson(o));
-					}
-					else
-					{
-						auto value = o["_id"].AsString();
-						builder.find(BSON("_id" << value)).upsert().replaceOne(ToBson(o));
-					}
-				}
-
-				mongo::WriteResult result;
-				builder.execute(0, &result);
+				Delete(objects, url, database, collection);
+				Insert(objects, url, database, collection);
 			}
 		}
 
 		static
 			void
 			CreateIndex(
-			const string &url
-			, const string &database
-			, const string &collection
-			, const mongo::IndexSpec &descriptor)
+				const string &attribute
+				, const string &url
+				, const string &database
+				, const string &collection)
 		{
-			unique_ptr<DBClientBase> client(Create(url));
-			client->createIndex(database + "." + collection, descriptor);
+			mongocxx::client client{ mongocxx::uri{ url } };
+			client[database][collection].create_index(bsoncxx::builder::stream::document{} << attribute << 1 << bsoncxx::builder::stream::finalize);
 		}
 
 		static
 			void
 			CreateCollection(
-			const string &url
-			, const string &database
-			, const string &collection
-			, const bool isCapped = true
-			, const int maxDocumentsCount = 5000
-			, const long long maxCollectionSize = 5242880)
+				const string &url
+				, const string &database
+				, const string &collection)
 		{
-			unique_ptr<DBClientBase> client(Create(url));
+			mongocxx::client client{ mongocxx::uri{ url } };
+			client[database].create_collection(collection);
+		}
 
-			if (!client->createCollection(database + "." + collection, maxCollectionSize, isCapped, maxDocumentsCount))
-			{
-				throw exception("ClientMongo::CreateCollection(): failed");
-			}
+		static
+			void
+			CreateCappedCollection(
+				const string &url
+				, const string &database
+				, const string &collection
+				, const int maxDocumentsCount = 5000
+				, const long long maxCollectionSize = 5242880)
+		{
+			mongocxx::client client{ mongocxx::uri{ url } };
+			mongocxx::options::create_collection options;
+			options.capped(true);
+#pragma push_macro("max")
+#undef max
+			options.max(maxDocumentsCount);
+#pragma pop_macro("max")
+			options.size(maxCollectionSize);
+			client[database].create_collection(collection, options);
 		}
 
 		static
 			void
 			DropCollection(
-			const string &url
-			, const string &database
-			, const string &collection)
+				const string &url
+				, const string &database
+				, const string &collection)
 		{
-			unique_ptr<DBClientBase> client(Create(url));
-
-			if (!client->dropCollection(database + "." + collection))
-			{
-				throw exception("ClientMongo::DropCollection(): failed");
-			}
+			mongocxx::client client{ mongocxx::uri{ url } };
+			client[database][collection].drop();
 		}
 
 		static
 			void
 			DropDatabase(
-			const string &url
-			, const string &database)
+				const string &url
+				, const string &database)
 		{
-			unique_ptr<DBClientBase> client(Create(url));
-
-			if (!client->dropDatabase(database))
-			{
-				throw exception("ClientMongo::DropDatabase(): failed");
-			}
+			mongocxx::client client{ mongocxx::uri{ url } };
+			client[database].drop();
 		}
 	};
 
@@ -798,10 +884,10 @@ namespace Integro
 		static
 			Json
 			MakeRequest(
-			const string &url
-			, const string &request
-			, const string &path
-			, stringstream &content)
+				const string &url
+				, const string &request
+				, const string &path
+				, stringstream &content)
 		{
 			HttpClient client(url);
 			auto httpResponse = client.request(request, path, content);
@@ -838,12 +924,12 @@ namespace Integro
 		static
 			void
 			Index(
-			const vector<Mave> &objects
-			, const string &url
-			, const string &index
-			, const string &type
-			, const int maxBatchCount = 10000
-			, const int maxBatchSize = 100000000)
+				const vector<Mave::Mave> &objects
+				, const string &url
+				, const string &index
+				, const string &type
+				, const int maxBatchCount = 10000
+				, const int maxBatchSize = 100000000)
 		{
 			string request = "PUT";
 			string path = (index == "" ? "" : "/" + index + (type == "" ? "" : "/" + type)) + "/_bulk";
@@ -868,10 +954,10 @@ namespace Integro
 		static
 			void
 			Delete(
-			const vector<string> &ids
-			, const string &url
-			, const string &index
-			, const string &type)
+				const vector<string> &ids
+				, const string &url
+				, const string &index
+				, const string &type)
 		{
 			string request = "DELETE";
 			string path = index == "" ? "" : "/" + index + (type == "" ? "" : "/" + type);
@@ -902,8 +988,8 @@ namespace Integro
 		static
 			void
 			CreateIndex(
-			const string &url
-			, const string &index)
+				const string &url
+				, const string &index)
 		{
 			if (index == "")
 			{
@@ -919,8 +1005,8 @@ namespace Integro
 		static
 			void
 			DeleteIndex(
-			const string &url
-			, const string &index)
+				const string &url
+				, const string &index)
 		{
 			if (index == "")
 			{
@@ -936,9 +1022,9 @@ namespace Integro
 		static
 			void
 			DeleteType(
-			const string &url
-			, const string &index
-			, const string &type)
+				const string &url
+				, const string &index
+				, const string &type)
 		{
 			if (index == "" || type == "")
 			{
@@ -954,9 +1040,9 @@ namespace Integro
 		static
 			int
 			Count(
-			const string &url
-			, const string &index
-			, const string &type)
+				const string &url
+				, const string &index
+				, const string &type)
 		{
 			string request = "GET";
 			string path = (index == "" ? "" : "/" + index + (type == "" ? "" : "/" + type)) + "/_search?from=0&size=0";
@@ -966,28 +1052,28 @@ namespace Integro
 		}
 
 		static
-			Mave
+			Mave::Mave
 			Get(
-			const string &url
-			, const string &index
-			, const string &type
-			, const string &id)
+				const string &url
+				, const string &index
+				, const string &type
+				, const string &id)
 		{
 			string request = "GET";
 			string path = (index == "" ? "" : "/" + index + (type == "" ? "" : "/" + type)) + id;
 			stringstream content;
 			auto response = MakeRequest(url, request, path, content);
-			return ToMave(response);
+			return Mave::FromJson(response);
 		}
 
 		static
 			void
 			Get(
-			function<void(Mave&)> OnObject
-			, const vector<string> &ids
-			, const string &url
-			, const string &index
-			, const string &type)
+				function<void(Mave::Mave&)> OnObject
+				, const vector<string> &ids
+				, const string &url
+				, const string &index
+				, const string &type)
 		{
 			if (ids.size() > 0)
 			{
@@ -1017,7 +1103,7 @@ namespace Integro
 				{
 					if (!o["_source"].is_null())
 					{
-						OnObject(ToMave(o["_source"]));
+						OnObject(Mave::FromJson(o["_source"]));
 					}
 				}
 			}
@@ -1026,12 +1112,12 @@ namespace Integro
 		static
 			void
 			Search(
-			function<void(Mave&)> OnObject
-			, const string &url
-			, const string &index
-			, const string &type
-			, const string &attribute
-			, vector<string> &values)
+				function<void(Mave::Mave&)> OnObject
+				, const string &url
+				, const string &index
+				, const string &type
+				, const string &attribute
+				, vector<string> &values)
 		{
 			stringstream query;
 			query << "{\"query\":{\"constant_score\":{\"filter\":{\"terms\":{\"" << attribute << "\":[";
@@ -1056,14 +1142,14 @@ namespace Integro
 		static
 			void
 			Search(
-			function<void(Mave&)> OnObject
-			, const string &url
-			, const string &index
-			, const string &type
-			, const string &query = ""
-			, const long long from = 0
-			, const long long count = -1
-			, const long long batchCount = 10000)
+				function<void(Mave::Mave&)> OnObject
+				, const string &url
+				, const string &index
+				, const string &type
+				, const string &query = ""
+				, const long long from = 0
+				, const long long count = -1
+				, const long long batchCount = 10000)
 		{
 			string request = "GET";
 			stringstream content;
@@ -1076,7 +1162,7 @@ namespace Integro
 
 				for (auto &o : response["hits"]["hits"].array_items())
 				{
-					OnObject(ToMave(o["_source"]));
+					OnObject(Mave::FromJson(o["_source"]));
 				}
 
 				auto m = response["hits"]["total"].int_value();
@@ -1091,8 +1177,8 @@ namespace Integro
 		static
 			string
 			Get(
-			const string &path
-			, const string &key)
+				const string &path
+				, const string &key)
 		{
 			string value;
 
@@ -1107,8 +1193,8 @@ namespace Integro
 		static
 			string
 			GetOrDefault(
-			const string &path
-			, const string &key)
+				const string &path
+				, const string &key)
 		{
 			string value;
 			TryGet(path, key, value);
@@ -1118,9 +1204,9 @@ namespace Integro
 		static
 			bool
 			TryGet(
-			const string &path
-			, const string &key
-			, string &value)
+				const string &path
+				, const string &key
+				, string &value)
 		{
 			value = "";
 
@@ -1189,9 +1275,9 @@ namespace Integro
 		static
 			void
 			Set(
-			const string &path
-			, const string &key
-			, const string &value)
+				const string &path
+				, const string &key
+				, const string &value)
 		{
 			int rc = 0;
 			MDB_env *env = NULL;
@@ -1270,8 +1356,8 @@ namespace Integro
 		static
 			void
 			Remove(
-			const string &path
-			, const string &key)
+				const string &path
+				, const string &key)
 		{
 			int rc = 0;
 			MDB_env *env = NULL;
@@ -1346,8 +1432,8 @@ namespace Integro
 		static
 			void
 			Query(
-			const string &path
-			, function<void(const string &key, const string &value)> OnKyeValue)
+				const string &path
+				, function<void(const string &key, const string &value)> OnKyeValue)
 		{
 			int rc = 0;
 			MDB_env *env = NULL;

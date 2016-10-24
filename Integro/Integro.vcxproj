@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
@@ -27,26 +27,26 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v120</PlatformToolset>
+    <PlatformToolset>v140</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -99,13 +99,13 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <AdditionalIncludeDirectories>..\..\boost\include;..\..\openldap\libldap\include;..\..\ldapcpp\ldapcpp\include;..\..\mongo-client\include;..\..\simple-web-server;..\..\lmdb\liblmdb;..\..\spdlog\include;..\..\json11;..\..\FreeTds\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>\;..\..\boost\include;..\..\openldap\libldap\include;..\..\ldapcpp\ldapcpp\include;..\..\simple-web-server;..\..\lmdb\liblmdb;..\..\spdlog\include;..\..\json11;..\..\FreeTds\include;..\..\mongo-cxx-driver\Debug\include\bsoncxx\v_noabi;..\..\mongo-cxx-driver\Debug\include\mongocxx\v_noabi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>..\..\openssl\lib;..\..\boost\lib;..\..\mongo-client\lib;..\..\cyrus-sasl\x64\Debug;..\..\openldap\x64\Debug;..\..\ldapcpp\x64\Debug;..\..\lmdb\x64\Debug;..\..\FreeTds\x64\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>ldapcpp.lib;liblber.lib;libldap.lib;libsasl2.lib;libeay32MTd.lib;ssleay32MTd.lib;ws2_32.lib;libboost_system-vc120-mt-sgd-1_57.lib;lmdb.lib;replacements.lib;tds.lib;dblib.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\..\openssl\lib;..\..\boost\lib;..\..\cyrus-sasl\x64\Debug;..\..\openldap\x64\Debug;..\..\ldapcpp\x64\Debug;..\..\lmdb\x64\Debug;..\..\FreeTds\x64\Debug;..\..\mongo-cxx-driver\Debug\lib;..\..\mongo-c-driver\Debug\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>ldapcpp.lib;liblber.lib;libldap.lib;libsasl2.lib;libeay32MTd.lib;ssleay32MTd.lib;ws2_32.lib;crypt32.lib;libboost_system-vc140-mt-sgd-1_61.lib;lmdb.lib;replacements.lib;tds.lib;dblib.lib;libbsoncxx.lib;libmongocxx.lib;bson-static-1.0.lib;mongoc-static-1.0.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
       <Command>xcopy /I /Y "$(ProjectDir)configs" "$(TargetDir)configs"</Command>
@@ -138,26 +138,33 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <AdditionalIncludeDirectories>..\..\boost\include;..\..\openldap\libldap\include;..\..\ldapcpp\ldapcpp\include;..\..\mongo-client\include;..\..\simple-web-server;..\..\lmdb\liblmdb;..\..\spdlog\include;..\..\json11;..\..\FreeTds\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>\;..\..\boost\include;..\..\openldap\libldap\include;..\..\ldapcpp\ldapcpp\include;..\..\simple-web-server;..\..\lmdb\liblmdb;..\..\spdlog\include;..\..\json11;..\..\FreeTds\include;..\..\mongo-cxx-driver\Release\include\bsoncxx\v_noabi;..\..\mongo-cxx-driver\Release\include\mongocxx\v_noabi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalLibraryDirectories>..\..\openssl\lib;..\..\boost\lib;..\..\mongo-client\lib;..\..\cyrus-sasl\x64\Release;..\..\openldap\x64\Release;..\..\ldapcpp\x64\Release;..\..\lmdb\x64\Release;..\..\FreeTds\x64\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>ldapcpp.lib;liblber.lib;libldap.lib;libsasl2.lib;libeay32MT.lib;ssleay32MT.lib;ws2_32.lib;libboost_system-vc120-mt-s-1_57.lib;lmdb.lib;replacements.lib;tds.lib;dblib.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\..\openssl\lib;..\..\boost\lib;..\..\cyrus-sasl\x64\Release;..\..\openldap\x64\Release;..\..\ldapcpp\x64\Release;..\..\lmdb\x64\Release;..\..\FreeTds\x64\Release;..\..\mongo-cxx-driver\Release\lib;..\..\mongo-c-driver\Release\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>ldapcpp.lib;liblber.lib;libldap.lib;libsasl2.lib;libeay32MT.lib;ssleay32MT.lib;ws2_32.lib;crypt32.lib;libboost_system-vc140-mt-s-1_61.lib;lmdb.lib;replacements.lib;tds.lib;dblib.lib;libbsoncxx.lib;libmongocxx.lib;bson-static-1.0.lib;mongoc-static-1.0.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PreBuildEvent>
       <Command>xcopy /I /Y "$(ProjectDir)configs" "$(TargetDir)configs"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Access\ElasticClient.hpp" />
+    <ClInclude Include="Access\LdapClient.hpp" />
+    <ClInclude Include="Access\LmdbClient.hpp" />
+    <ClInclude Include="Access\MongoClient.hpp" />
+    <ClInclude Include="Access\TdsClient.hpp" />
     <ClInclude Include="Copy.hpp" />
     <ClInclude Include="Hash.hpp" />
-    <ClInclude Include="Mave.hpp" />
+    <ClInclude Include="Mave\Bson.hpp" />
+    <ClInclude Include="Mave\Json.hpp" />
+    <ClInclude Include="Mave\Ldap.hpp" />
+    <ClInclude Include="Mave\Mave.hpp" />
     <ClInclude Include="Synchronized.hpp" />
-    <ClInclude Include="Access.hpp" />
     <ClInclude Include="Integro.hpp" />
     <ClInclude Include="Debug.hpp" />
     <ClInclude Include="Milliseconds.hpp" />

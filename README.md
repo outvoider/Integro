@@ -418,7 +418,7 @@ static
 
 Access.hpp:
 
-	ClientTds methods.
+	TdsClient methods.
 
 static
 	void
@@ -437,14 +437,14 @@ void
 
 	Executes a sql command on a currently connected database.
 
-ClientTds(
+TdsClient(
 	const string &host
 	, const string &user
 	, const string &password)
 
 	Establishes a connection to a database.
 
-~ClientTds()
+~TdsClient()
 
 	Closes a connection to a database.
 
@@ -530,11 +530,11 @@ Infin(
 	OnEvent				expected to log informative messages
 
 	Initializes/Deinitializes a freetds dblib library.
-	ClientTds has a private static field of Infin, which must be initialized according to c++ rules.
+	TdsClient has a private static field of Infin, which must be initialized according to c++ rules.
 	This design is intended to prevent subtle bugs while using a freetds library, which should be treated as one global instance.
 
 
-	ClientLdap methods.
+	LdapClient methods.
 
 static
 	int
@@ -588,7 +588,7 @@ static
 	On any failure, Search will report it and continue execution from the next interval.
 
 
-	ClientMongo methods.
+	MongoClient methods.
 
 static
 	DBClientBase*
@@ -738,7 +738,7 @@ static
 	collection		a name of a database collection
 
 
-	ClientElastic methods.
+	ElasticClient methods.
 
 static
 	Json
@@ -875,7 +875,7 @@ static
 	type		a name of an index type
 
 
-	ClientLmdb methods.
+	LmdbClient methods.
 
 static
 	string
@@ -1160,7 +1160,7 @@ Json
 Milliseconds.hpp:
 
 milliseconds
-	TimeTToMilliseconds(
+	FromTimeT(
 	const time_t t)
 
 	t		time in time_t format
@@ -1168,13 +1168,13 @@ milliseconds
 	Converts time from time_t to milliseconds format.
 
 time_t
-	MillisecondsToTimeT(
+	ToTimeT(
 	const milliseconds m)
 
 	Converts time from milliseconds to time_t format.
 
 milliseconds
-	LdapTimeToMilliseconds(
+	FromLdapTime(
 	const string &lt)
 
 	lt		time in ldap format
@@ -1182,13 +1182,13 @@ milliseconds
 	Converts time from ldap to milliseconds format.
 
 string
-	MillisecondsToLdapTime(
+	ToLdapTime(
 	const milliseconds m)
 
 	Converts time from milliseconds to ldap format.
 
 milliseconds
-	UtcToMilliseconds(
+	FromUtc(
 	const string &ut)
 
 	ut		time in UTC format
@@ -1196,7 +1196,7 @@ milliseconds
 	Converts time from UTC to milliseconds format.
 
 string
-	MillisecondsToUtc(
+	ToUtc(
 	const milliseconds m
 	, const bool hasT = false
 	, const bool hasM = false

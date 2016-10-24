@@ -13,16 +13,16 @@ namespace Integro
 	inline
 		int
 		Hash(
-		unsigned char data
-		, int hash = HASH_SEED)
+			unsigned char data
+			, int hash = HASH_SEED)
 	{
 		return (data ^ hash) * HASH_PRIME;
 	}
 
 	int
 		Hash(
-		const unsigned char *data
-		, int count, int hash = HASH_SEED)
+			const unsigned char *data
+			, int count, int hash = HASH_SEED)
 	{
 		while (--count >= 0)
 		{
@@ -34,7 +34,7 @@ namespace Integro
 
 	int
 		Hash(
-		const string &data)
+			const string &data)
 	{
 		return Hash((const unsigned char*)data.c_str(), data.size());
 	}

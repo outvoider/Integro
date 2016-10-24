@@ -12,10 +12,13 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 
-#include "Access.hpp"
+#include "Access/TdsClient.hpp"
+#include "Access/LdapClient.hpp"
+#include "Access/MongoClient.hpp"
+#include "Access/ElasticClient.hpp"
+#include "Access/LmdbClient.hpp"
 #include "Synchronized.hpp"
 #include "Milliseconds.hpp"
-#include "Mave.hpp"
 
 namespace Integro
 {
@@ -34,14 +37,14 @@ namespace Integro
 		template <
 			typename Datum
 			, typename Time>
-		static
+			static
 			void
 			CopyDataInBulk(
-			function<void(Time, function<void(Datum&)>)> LoadData
-			, function<void(vector<Datum>&)> SaveData
-			, function<Time()> LoadStartTime
-			, function<void(Time)> SaveStartTime
-			, function<Time(Datum&)> GetTime)
+				function<void(Time, function<void(Datum&)>)> LoadData
+				, function<void(vector<Datum>&)> SaveData
+				, function<Time()> LoadStartTime
+				, function<void(Time)> SaveStartTime
+				, function<Time(Datum&)> GetTime)
 		{
 			auto startTime = LoadStartTime();
 			vector<Datum> data;
@@ -68,24 +71,22 @@ namespace Integro
 		template <
 			typename Datum
 			, typename Time>
-		static
+			static
 			void
 			CopyDataInChunks(
-			function<void(Time, function<void(Datum&)>)> LoadData
-			, function<void(vector<Datum>&)> SaveData
-			, function<Time()> LoadStartTime
-			, function<void(Time)> SaveStartTime
-			, function<Time(Datum&)> GetTime)
+				function<void(Time, function<void(Datum&)>)> LoadData
+				, function<void(vector<Datum>&)> SaveData
+				, function<Time()> LoadStartTime
+				, function<void(Time)> SaveStartTime
+				, function<Time(Datum&)> GetTime)
 		{
 			auto startTime = LoadStartTime();
 			SynchronizedBuffer<Datum> buffer;
-			auto hasFinishedLoadingData = false;
-			auto hasFinishedSavingData = false;
 			auto hasFailed = false;
 			atomic_flag lock = ATOMIC_FLAG_INIT;
 			string error;
 
-			auto TryAbort = [&]()
+			auto TryThrow = [&]()
 			{
 				if (hasFailed)
 				{
@@ -93,11 +94,61 @@ namespace Integro
 				}
 			};
 
-			auto OnError = [&](function<void()> action, bool &hasFinished)
+			enum ActionName { LoadDataAN, SaveDataAN };
+			bool hasActionFinished[] = { false, false };
+			function<void()> actions[] =
+			{
+				[&]() // LoadData
+				{
+					LoadData(startTime, [&](Datum &datum)
+					{
+						while (buffer.Size() > 10000)
+						{
+							TryThrow();
+							this_thread::sleep_for(chrono::milliseconds(1));
+						}
+
+						TryThrow();
+						buffer.AddOne(datum);
+					});
+				},
+
+				[&]() // SaveData
+				{
+					while (!hasActionFinished[LoadDataAN] || !buffer.IsEmpty())
+					{
+						if (buffer.IsEmpty())
+						{
+							this_thread::sleep_for(chrono::milliseconds(1));
+						}
+						else
+						{
+							auto data = buffer.GetAll();
+
+							for (auto &datum : data)
+							{
+								auto time = GetTime(datum);
+
+								if (startTime > time)
+								{
+									throw exception("Copy::CopyDataInChunks(): invariant violation, the current record's time must be greater than or equal to the previous record's time");
+								}
+
+								startTime = time;
+							}
+
+							SaveData(data);
+							SaveStartTime(startTime);
+						}
+					}
+				}
+			};
+
+			auto OnError = [&](ActionName actionName)
 			{
 				try
 				{
-					action();
+					actions[actionName]();
 				}
 				catch (const exception &ex)
 				{
@@ -117,56 +168,11 @@ namespace Integro
 				}
 
 				atomic_thread_fence(memory_order_seq_cst);
-				hasFinished = true;
+				hasActionFinished[actionName] = true;
 			};
 
-			auto LoadDataA = [&]()
-			{
-				LoadData(startTime, [&](Datum &datum)
-				{
-					while (buffer.Size() > 10000)
-					{
-						TryAbort();
-						this_thread::sleep_for(chrono::milliseconds(1));
-					}
-
-					TryAbort();
-					buffer.AddOne(datum);
-				});
-			};
-
-			auto SaveDataA = [&]()
-			{
-				while (!hasFinishedLoadingData || !buffer.IsEmpty())
-				{
-					if (buffer.IsEmpty())
-					{
-						this_thread::sleep_for(chrono::milliseconds(1));
-					}
-					else
-					{
-						auto data = buffer.GetAll();
-
-						for (auto &datum : data)
-						{
-							auto time = GetTime(datum);
-
-							if (startTime > time)
-							{
-								throw exception("Copy::CopyDataInChunks(): invariant violation, the current record's time must be greater than or equal to the previous record's time");
-							}
-
-							startTime = time;
-						}
-
-						SaveData(data);
-						SaveStartTime(startTime);
-					}
-				}
-			};
-
-			thread SaveDataThread(OnError, SaveDataA, hasFinishedSavingData);
-			OnError(LoadDataA, hasFinishedLoadingData);
+			thread SaveDataThread(OnError, SaveDataAN);
+			OnError(LoadDataAN);
 
 			SaveDataThread.join();
 
@@ -180,18 +186,18 @@ namespace Integro
 			typename Datum
 			, typename Time
 			, typename Id>
-		static
+			static
 			void
 			CopyCappedDataInChunks(
-			function<void(Id&, function<void(Datum&)>)> LoadCappedData
-			, function<void(Time, function<void(Datum&)>)> LoadData
-			, function<void(vector<Datum>&)> SaveData
-			, function<Time()> LoadStartTime
-			, function<Id()> LoadStartId
-			, function<void(Time)> SaveStartTime
-			, function<void(Id&)> SaveStartId
-			, function<Time(Datum&)> GetTime
-			, function<Id(Datum&)> GetId)
+				function<void(Id&, function<void(Datum&)>)> LoadCappedData
+				, function<void(Time, function<void(Datum&)>)> LoadData
+				, function<void(vector<Datum>&)> SaveData
+				, function<Time()> LoadStartTime
+				, function<Id()> LoadStartId
+				, function<void(Time)> SaveStartTime
+				, function<void(Id&)> SaveStartId
+				, function<Time(Datum&)> GetTime
+				, function<Id(Datum&)> GetId)
 		{
 			auto cappedStartId = LoadStartId();
 			auto cappedStartTime = LoadStartTime();
@@ -408,15 +414,15 @@ namespace Integro
 		// LoadData
 
 		static
-			function<void(milliseconds, function<void(Mave&)>)>
+			auto
 			LoadDataTds(
-			const string &host
-			, const string &user
-			, const string &password
-			, const string &database
-			, const string &query)
+				const string &host
+				, const string &user
+				, const string &password
+				, const string &database
+				, const string &query)
 		{
-			return [=](milliseconds startTime, function<void(Mave&)> OnDatum) mutable
+			return [=](milliseconds startTime, function<void(Mave::Mave&)> OnDatum) mutable
 			{
 				// TEMPORARY SOLUTION NOTICE:
 				// subtract 1 second from startTime to compensate for addition of 1 second in a query
@@ -425,106 +431,105 @@ namespace Integro
 					, regex("\\$\\(LAST_EXEC_TIME\\)")
 					, startTime <= milliseconds(1000)
 					? "CONVERT(datetime, '1970-01-01')"
-					: "convert(datetime, '" + MillisecondsToUtc(startTime - milliseconds(1000), true) + "')");
+					: "convert(datetime, '" + Milliseconds::ToUtc(startTime - milliseconds(1000), true) + "')");
 
-				ClientTds::ExecuteQuery(host, user, password, database, q, OnDatum);
+				Access::TdsClient::ExecuteQuery(host, user, password, database, q, OnDatum);
 			};
 		}
 
 		static
-			function<void(milliseconds, function<void(Mave&)>)>
+			auto
 			LoadDataLdap(
-			const string &host
-			, const int port
-			, const string &user
-			, const string &password
-			, const string &node
-			, const string &filter
-			, const string &idAttribute
-			, const string &timeAttribute
-			, function<void(const string&)> OnError
-			, function<void(const string&)> OnEvent)
+				const string &host
+				, const int port
+				, const string &user
+				, const string &password
+				, const string &node
+				, const string &filter
+				, const string &idAttribute
+				, const string &timeAttribute
+				, function<void(const string&)> OnError
+				, function<void(const string&)> OnEvent)
 		{
-			return [=](milliseconds startTime, function<void(Mave&)> OnDatum) mutable
+			return [=](milliseconds startTime, function<void(Mave::Mave&)> OnDatum) mutable
 			{
-				ClientLdap::Search(host, port, user, password, node, filter, idAttribute, timeAttribute, startTime, milliseconds::zero(), OnDatum, OnError, OnEvent);
+				Access::LdapClient::Search(host, port, user, password, node, filter, idAttribute, timeAttribute, startTime, milliseconds::zero(), OnDatum, OnError, OnEvent);
 			};
 		}
 
 		static
-			function<void(milliseconds, function<void(Mave&)>)>
+			auto
 			LoadDataMongo(
-			const string &url
-			, const string &database
-			, const string &collection
-			, const string &timeAttribute)
+				const string &url
+				, const string &database
+				, const string &collection
+				, const string &timeAttribute)
 		{
-			mongo::IndexSpec index; index.addKey(timeAttribute);
-			ClientMongo::CreateIndex(url, database, collection, index);
+			Access::MongoClient::CreateIndex(timeAttribute, url, database, collection);
 
-			return [=](milliseconds startTime, function<void(Mave&)> OnDatum) mutable
+			return [=](milliseconds startTime, function<void(Mave::Mave&)> OnDatum) mutable
 			{
-				ClientMongo::Query(url, database, collection, timeAttribute, startTime, milliseconds::zero(), OnDatum);
+				Access::MongoClient::Query(OnDatum, url, database, collection, timeAttribute, startTime, milliseconds::zero());
 			};
 		}
 
 		static
-			function<void(OID&, function<void(Mave&)>)>
+			auto
 			LoadCappedDataMongo(
-			const string &url
-			, const string &database
-			, const string &collection)
+				const string &url
+				, const string &database
+				, const string &collection)
 		{
-			return [=](OID &startId, function<void(Mave&)> OnDatum) mutable
+			return [=](bsoncxx::oid &startId, function<void(Mave::Mave&)> OnDatum) mutable
 			{
-				ClientMongo::QueryCapped(url, database, collection, startId, OnDatum);
+				Access::MongoClient::QueryCapped(OnDatum, url, database, collection, startId);
 			};
 		}
 
 		// SaveData
 
 		static
-			function<void(vector<Mave>&)>
+			auto
 			SaveDataMongo(
-			const string &url
-			, const string &database
-			, const string &collection)
+				const string &url
+				, const string &database
+				, const string &collection)
 		{
-			return [=](vector<Mave> &data) mutable
+			return [=](vector<Mave::Mave> &data) mutable
 			{
-				ClientMongo::Upsert(url, database, collection, data);
+				Access::MongoClient::Upsert(data, url, database, collection);
 			};
 		}
 
 		static
-			function<void(vector<Mave>&)>
+			auto
 			SaveDataElastic(
-			const string &url
-			, const string &index
-			, const string &type)
+				const string &url
+				, const string &index
+				, const string &type)
 		{
-			return [=](vector<Mave> &data) mutable
+			return [=](vector<Mave::Mave> &data) mutable
 			{
-				ClientElastic::Index(data, url, index, type);
+				Access::ElasticClient::Index(data, url, index, type);
 			};
 		}
 
 		// ProcessData
 
 		static
-			function<void(vector<Mave>&)>
+			auto
 			ProcessDataTds(
-			const string &channelName
-			, const string &modelName
-			, const string &model
-			, const string &action
-			, const vector<string> &targetStores)
+				const string &channelName
+				, const string &modelName
+				, const string &model
+				, const string &action
+				, const vector<string> &targetStores)
 		{
-			return [=](vector<Mave> &data) mutable
+			return [=](vector<Mave::Mave> &data) mutable
 			{
 				for (auto &datum : data)
 				{
-					datum = map<string, Mave>(
+					datum = map<string, Mave::Mave>(
 					{
 						{ "_id", boost::uuids::to_string(boost::uuids::random_generator()()) }
 						, { "action", action }
@@ -532,7 +537,7 @@ namespace Integro
 						, { "model", model }
 						, { "modelName", modelName }
 						, { "processed", 0 }
-						, { "start_time", UtcToMilliseconds(datum["start_time"].AsString()) }
+						, { "start_time", Milliseconds::FromUtc(datum["start_time"].AsString()) }
 						, { "source", datum }
 					});
 
@@ -554,19 +559,19 @@ namespace Integro
 		}
 
 		static
-			function<void(vector<Mave>&)>
+			auto
 			ProcessDataLdap(
-			const string &idAttribute
-			, const string &channelName
-			, const string &modelName
-			, const string &model
-			, const string &action)
+				const string &idAttribute
+				, const string &channelName
+				, const string &modelName
+				, const string &model
+				, const string &action)
 		{
-			return [=](vector<Mave> &data) mutable
+			return [=](vector<Mave::Mave> &data) mutable
 			{
 				for (auto &datum : data)
 				{
-					datum = map<string, Mave>(
+					datum = map<string, Mave::Mave>(
 					{
 						{ "_id", datum[idAttribute].AsString() }
 						, { "action", action }
@@ -582,12 +587,12 @@ namespace Integro
 		}
 
 		static
-			function<void(vector<Mave>&)>
+			auto
 			ProcessDataLdapElastic()
 		{
-			return [=](vector<Mave> &data) mutable
+			return [=](vector<Mave::Mave> &data) mutable
 			{
-				for (auto & datum : data)
+				for (auto &datum : data)
 				{
 					// Binary
 					{
@@ -682,18 +687,18 @@ namespace Integro
 		}
 
 		static
-			function<void(vector<Mave>&)>
+			auto
 			ProcessDataMongo(
-			const string &channelName
-			, const string &modelName
-			, const string &model
-			, const string &action)
+				const string &channelName
+				, const string &modelName
+				, const string &model
+				, const string &action)
 		{
-			return [=](vector<Mave> &data) mutable
+			return [=](vector<Mave::Mave> &data) mutable
 			{
-				for (auto & datum : data)
+				for (auto &datum : data)
 				{
-					datum = map<string, Mave>(
+					datum = map<string, Mave::Mave>(
 					{
 						{ "_id", boost::uuids::to_string(boost::uuids::random_generator()()) }
 						, { "action", action }
@@ -711,71 +716,71 @@ namespace Integro
 		// Metadata
 
 		static
-			function<milliseconds()>
+			auto
 			LoadStartTimeLmdb(
-			const string &path
-			, const string &key)
+				const string &path
+				, const string &key)
 		{
 			return [=]() mutable
 			{
-				return milliseconds(stoull("0" + ClientLmdb::GetOrDefault(path, key)));
+				return milliseconds(stoull("0" + Access::LmdbClient::GetOrDefault(path, key)));
 			};
 		}
 
 		static
-			function<OID()>
+			auto
 			LoadStartIdLmdb(
-			const string &path
-			, const string &key)
+				const string &path
+				, const string &key)
 		{
 			return [=]() mutable
 			{
-				auto value = ClientLmdb::GetOrDefault(path, key);
-				return value == "" ? OID() : OID(value);
+				auto value = Access::LmdbClient::GetOrDefault(path, key);
+				return value == "" ? bsoncxx::types::b_oid().value : bsoncxx::oid(value);
 			};
 		}
 
 		static
-			function<void(milliseconds)>
+			auto
 			SaveStartTimeLmdb(
-			const string &path
-			, const string &key)
+				const string &path
+				, const string &key)
 		{
 			return [=](milliseconds time) mutable
 			{
-				ClientLmdb::Set(path, key, to_string(time.count()));
+				Access::LmdbClient::Set(path, key, to_string(time.count()));
 			};
 		}
 
 		static
-			function<void(OID&)>
+			auto
 			SaveStartIdLmdb(
-			const string &path
-			, const string &key)
+				const string &path
+				, const string &key)
 		{
-			return [=](OID &id) mutable
+			return [=](bsoncxx::oid &id) mutable
 			{
-				ClientLmdb::Set(path, key, id.toString());
+				Access::LmdbClient::Set(path, key, id.to_string());
 			};
 		}
 
 		static
-			function<milliseconds(Mave&)>
+			auto
 			GetTimeTds(
-			const string &timeAttribute)
+				const string &timeAttribute)
 		{
-			return [=](Mave &datum) mutable
+			return [=](Mave::Mave &datum) mutable
 			{
-				return UtcToMilliseconds(datum[timeAttribute].AsString());
+				return Milliseconds::FromUtc(datum[timeAttribute].AsString());
 			};
 		}
 
 		static
-			function<milliseconds(Mave&)>
+			auto
 			GetTimeLdap(
-			const string &timeAttribute)
+				const string &timeAttribute)
 		{
-			return [=](Mave &datum) mutable
+			return [=](Mave::Mave &datum) mutable
 			{
 				//return ConversionMilliseconds::FromLdapTime(datum[timeAttribute].AsString());
 				//return max(milliseconds::zero(), ConversionMilliseconds::FromLdapTime(datum[timeAttribute].AsString()) - milliseconds(25 * 60 * 60 * 1000));
@@ -784,37 +789,37 @@ namespace Integro
 		}
 
 		static
-			function<milliseconds(Mave&)>
+			auto
 			GetTimeMongo(
-			const string &timeAttribute)
+				const string &timeAttribute)
 		{
-			return [=](Mave &datum) mutable
+			return [=](Mave::Mave &datum) mutable
 			{
 				return datum[timeAttribute].AsMilliseconds();
 			};
 		}
 
 		static
-			function<OID(Mave&)>
+			auto
 			GetIdMongo(
-			const string &idAttribute)
+				const string &idAttribute)
 		{
-			return [=](Mave &datum) mutable
+			return [=](Mave::Mave &datum) mutable
 			{
-				return datum[idAttribute].AsBsonOid();
+				return bsoncxx::oid(datum[idAttribute].AsCustom().second);
 			};
 		}
 
 		// Duplicates
 
 		static
-			function<void(vector<Mave>&)>
+			auto
 			RemoveDuplicates(
-			const string &descriptorAttribute
-			, const string &sourceAttribute
-			, function<void(const string&, vector<int>&, function<void(Mave&)>)> LoadData)
+				const string &descriptorAttribute
+				, const string &sourceAttribute
+				, function<void(const string&, vector<int>&, function<void(Mave::Mave&)>)> LoadData)
 		{
-			return [=](vector<Mave> &data) mutable
+			return [=](vector<Mave::Mave> &data) mutable
 			{
 				if (data.size() == 0)
 				{
@@ -833,7 +838,7 @@ namespace Integro
 				set<int> storedDescriptors;
 				set<string> storedSources;
 
-				LoadData(descriptorAttribute, descriptors, [&](Mave &datum)
+				LoadData(descriptorAttribute, descriptors, [&](Mave::Mave &datum)
 				{
 					storedSources.insert(ToString(datum[sourceAttribute]));
 					storedDescriptors.insert(datum[descriptorAttribute].AsInt());
@@ -844,7 +849,7 @@ namespace Integro
 					return;
 				}
 
-				vector<Mave> noDuplicatesData;
+				vector<Mave::Mave> noDuplicatesData;
 
 				for (auto &datum : data)
 				{
@@ -860,35 +865,32 @@ namespace Integro
 		}
 
 		static
-			function<void(const string&, vector<int>&, function<void(Mave&)>)>
+			auto
 			LoadDuplicateDataMongo(
-			const string &url
-			, const string &database
-			, const string &collection
-			, const string &descriptorAttribute)
+				const string &url
+				, const string &database
+				, const string &collection
+				, const string &descriptorAttribute)
 		{
-			mongo::IndexSpec index; index.addKey(descriptorAttribute);
-			ClientMongo::CreateIndex(url, database, collection, index);
+			Access::MongoClient::CreateIndex(descriptorAttribute, url, database, collection);
 
-			return [=](const string &attribute, vector<int> &values, function<void(Mave&)> OnDatum) mutable
+			return [=](const string &attribute, vector<int> &values, function<void(Mave::Mave&)> OnDatum) mutable
 			{
-				mongo::BSONArrayBuilder ba; for (auto value : values) ba.append(value);
-				auto query = MONGO_QUERY(attribute << BSON("$in" << ba.arr())).sort(attribute);
-				ClientMongo::Query(url, database, collection, query, OnDatum);
+				Access::MongoClient::Query(OnDatum, url, database, collection, attribute, values);
 			};
 		}
 
 		static
-			function<void(const string&, vector<int>&, function<void(Mave&)>)>
+			auto
 			LoadDuplicateDataElastic(
-			const string &url
-			, const string &index
-			, const string &type)
+				const string &url
+				, const string &index
+				, const string &type)
 		{
-			return [=](const string &attribute, vector<int> &values, function<void(Mave&)> OnDatum) mutable
+			return [=](const string &attribute, vector<int> &values, function<void(Mave::Mave&)> OnDatum) mutable
 			{
 				vector<string> vv; for (auto v : values) vv.push_back(to_string(v));
-				ClientElastic::Search(OnDatum, url, index, type, attribute, vv);
+				Access::ElasticClient::Search(OnDatum, url, index, type, attribute, vv);
 			};
 		}
 	};
