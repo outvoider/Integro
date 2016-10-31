@@ -532,9 +532,9 @@ namespace Integro
 					datum = map<string, Mave::Mave>(
 					{
 						{ "_id", boost::uuids::to_string(boost::uuids::random_generator()()) }
+						,{ "_uid", datum.AsMap().count("_uid") == 0 ? "" : datum["_uid"].AsString() }
 						, { "action", action }
 						, { "channel", channelName }
-						, { "model", model }
 						, { "modelName", modelName }
 						, { "processed", 0 }
 						, { "start_time", Milliseconds::FromUtc(datum["start_time"].AsString()) }
@@ -547,7 +547,6 @@ namespace Integro
 					if (s.count("forType") > 0)
 					{
 						d["modelName"] = s["forType"].AsString();
-						d["model"] = regex_replace(s["forType"].AsString(), regex("[[:punct:]|[:space:]]"), "");
 					}
 
 					if (targetStores.size() > 0)
@@ -574,9 +573,9 @@ namespace Integro
 					datum = map<string, Mave::Mave>(
 					{
 						{ "_id", datum[idAttribute].AsString() }
+						, { "_uid", datum[idAttribute].AsString() }
 						, { "action", action }
 						, { "channel", channelName }
-						, { "model", model }
 						, { "modelName", modelName }
 						, { "processed", 0 }
 						, { "start_time", duration_cast<milliseconds>(chrono::system_clock::now().time_since_epoch()) }
@@ -701,9 +700,9 @@ namespace Integro
 					datum = map<string, Mave::Mave>(
 					{
 						{ "_id", boost::uuids::to_string(boost::uuids::random_generator()()) }
+						, { "_uid", datum.AsMap().count("_uid") == 0 ? "" : datum["_uid"].AsString() }
 						, { "action", action }
 						, { "channel", channelName }
-						, { "model", model }
 						, { "modelName", modelName }
 						, { "processed", 0 }
 						, { "start_time", datum["start_time"].AsString() }

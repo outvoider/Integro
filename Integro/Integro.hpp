@@ -436,8 +436,8 @@ namespace Integro
 	};
 
 	atomic_flag Integro::lock = ATOMIC_FLAG_INIT;
-	string configPath = "configs/client.conf";
-	//string configPath = "configs/direct_client.conf";
+	//string configPath = "configs/client.conf";
+	string configPath = "configs/direct_client.conf";
 	string applicationName = "Integro";
 	Access::TdsClient::Infin Access::TdsClient::infin(configPath, applicationName, Integro::OnError, Integro::OnEvent);
 }
