@@ -291,8 +291,35 @@ namespace Integro
 			{
 				if (!objects.empty())
 				{
-					Delete(objects, url, database, collection);
-					Insert(objects, url, database, collection);
+					mongocxx::options::bulk_write options; options.ordered(false);
+					mongocxx::bulk_write bulk{ options };
+					auto type = [](auto &o) -> auto
+					{
+						return o["_id"].IsString() ? 1 : (o["_id"].IsCustom() && o["_id"].AsCustom().first == Mave::BSON_OID ? 2 : 0);
+					};
+					auto fType = type(objects[0]);
+					for (auto &o : objects)
+					{
+						auto cType = type(o);
+						bsoncxx::builder::stream::document filter;
+						if (cType != fType)
+						{
+							throw exception("MongoClient::Upsert(): unexpected id type encountered");
+						}
+						if (cType == 1)
+						{
+							filter << "_id" << o["_id"].AsString();
+						}
+						else
+						{
+							filter << "_id" << bsoncxx::oid(o["_id"].AsCustom().second);
+						}
+						mongocxx::model::replace_one replace{ filter.view(), ToBsonDocument(o) }; replace.upsert(true);
+						bulk.append(replace);
+					}
+
+					mongocxx::client client{ mongocxx::uri{ url } };
+					auto result = client[database][collection].bulk_write(bulk);
 				}
 			}
 

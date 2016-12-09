@@ -965,14 +965,20 @@ namespace Integro
 			{
 				cout << "collection name: '" << collection << "'" << endl;
 				cout << "mongo count: " << Access::MongoClient::Count(mongoUrl, mongoDatabase, collection) << endl;
-				cout << "elastic count: " << Access::ElasticClient::Count(elasticUrl, elasticIndex, collection) << endl;
+				if (elasticUrl != ":")
+				{
+					cout << "elastic count: " << Access::ElasticClient::Count(elasticUrl, elasticIndex, collection) << endl;
+				}
 			}
 
 			for (auto &collection : ldapCollections)
 			{
 				cout << "collection name: '" << collection << "'" << endl;
 				cout << "mongo count: " << Access::MongoClient::Count(mongoUrl, mongoDatabase, collection) << endl;
-				cout << "elastic count: " << Access::ElasticClient::Count(elasticUrl, elasticIndex, collection) << endl;
+				if (elasticUrl != ":")
+				{
+					cout << "elastic count: " << Access::ElasticClient::Count(elasticUrl, elasticIndex, collection) << endl;
+				}
 			}
 		}
 

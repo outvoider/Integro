@@ -432,6 +432,7 @@ namespace Integro
 
 			thread ExecuteLdapActionThread(ExecuteLdapAction);
 			ExecuteTdsAction();
+			//ExecuteLdapAction();
 		}
 	};
 
